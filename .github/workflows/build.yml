@@ -1,7 +1,19 @@
+name: "Build"
+
+on:
+  push:
+    branches:
+      - "main"
+    tags-ignore:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
 jobs:
   release:
     name: Release - ${{ matrix.platform.os-name }}
     strategy:
+      fail-fast: false
       matrix:
         platform:
           - os-name: Linux-x86_64
