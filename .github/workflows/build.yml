@@ -8,7 +8,7 @@ on:
       - "**"
   pull_request:
   workflow_dispatch:
-
+  release:
 jobs:
   release:
     name: Release - ${{ matrix.platform.os-name }}
