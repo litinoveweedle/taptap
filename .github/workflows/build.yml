@@ -16,31 +16,16 @@ jobs:
         platform:
           - os-name: Linux-x86_64
             runs-on: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-          - os-name: Linux-x86_64
-            runs-on: ubuntu-22.04
             target: x86_64-unknown-linux-musl
-          - os-name: Linux-arm
-            runs-on: ubuntu-22.04
-            target: arm-unknown-linux-gnueabihf
           - os-name: Linux-arm
             runs-on: ubuntu-22.04
             target: arm-unknown-linux-musleabihf
           - os-name: Linux-arm
             runs-on: ubuntu-22.04
-            target: armv7-unknown-linux-gnueabihf
-          - os-name: Linux-arm
-            runs-on: ubuntu-22.04
             target: armv7-unknown-linux-musleabihf
           - os-name: Linux-i686
             runs-on: ubuntu-22.04
-            target: i686-unknown-linux-gnu
-          - os-name: Linux-i686
-            runs-on: ubuntu-22.04
             target: i686-unknown-linux-musl
-          - os-name: Linux-aarch64
-            runs-on: ubuntu-22.04
-            target: aarch64-unknown-linux-gnu
           - os-name: Linux-aarch64
             runs-on: ubuntu-22.04
             target: aarch64-unknown-linux-musl
