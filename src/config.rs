@@ -24,10 +24,11 @@ impl SourceConfig {
                     ConnectionMode::ReadWrite => false,
                     ConnectionMode::ReadOnly => true,
                 };
-                let keepalive = KeepaliveConfig {
-                    idle: config.keepalive_idle, 
-                    interval: config.keepalive_interval,
-                    count: config.keepalive_count
+
+                let keepalive = TcpKeepaliveConfig {
+                    idle: std::time::Duration::from_secs(config.keepalive_idle),
+                    interval: std::time::Duration::from_secs(config.keepalive_interval),
+                    count: config.keepalive_count,
                 };
 
                 let conn = gateway::physical::tcp::Connection::connect(addr, readonly, keepalive)?;
@@ -54,13 +55,10 @@ pub struct TcpConnectionConfig {
     #[serde(default = "default_port")]
     pub port: u16,
     pub mode: ConnectionMode,
-    // Idle time before keepalive probes are sent.
     #[serde(default = "default_keepalive_idle")]
-    pub keepalive_idle: std::time::Duration,
-    /// Interval between individual keepalive probes.
+    pub keepalive_idle: u64,
     #[serde(default = "default_keepalive_interval")]
-    pub keepalive_interval: std::time::Duration,
-    /// Number of unacknowledged probes before the connection is considered dead.
+    pub keepalive_interval: u64,
     #[serde(default = "default_keepalive_count")]
     pub keepalive_count: u32,
 }
@@ -70,22 +68,32 @@ impl From<TcpConnectionConfig> for SourceConfig {
     }
 }
 
+/// Configuration options for TCP keepalive.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct TcpKeepaliveConfig {
+    /// Idle time before keepalive probes are sent.
+    pub idle: std::time::Duration,
+    /// Interval between individual keepalive probes.
+    pub interval: std::time::Duration,
+    /// Number of unacknowledged probes before the connection is considered dead.
+    pub count: u32,
+}
+
 fn default_port() -> u16 {
     7160
 }
 
-fn default_default_keepalive_idle() -> std::time::Duration {
+fn default_keepalive_idle() -> u64 {
     30
 }
 
-fn default_default_keepalive_interval() -> std::time::Duration {
+fn default_keepalive_interval() -> u64 {
     10
 }
 
-fn default_default_keepalive_count() -> u32 {
+fn default_keepalive_count() -> u32 {
     5
 }
-
 
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
 pub enum ConnectionMode {

@@ -70,11 +70,11 @@ struct Source {
 
     // If --tcp is specified, the idle time before keepalive probes are sent.
     #[arg(long, requires = "tcp", default_value_t = 30)]
-    keepalive_idle: Option<std::time::Duration>,
+    keepalive_idle: Option<u32>,
 
     // If --tcp is specified, the interval between individual keepalive probes.
     #[arg(long, requires = "tcp", default_value_t = 10)]
-    keepalive_interval: Option<std::time::Duration>,
+    keepalive_interval: Option<u32>,
 
     // If --tcp is specified, the number of unacknowledged probes before the connection is considered dead.
     #[arg(long, requires = "tcp", default_value_t = 5)]
