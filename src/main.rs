@@ -55,18 +55,30 @@ enum Commands {
 #[derive(Args, Debug, Clone)]
 #[group(required = true, multiple = true)]
 struct Source {
-    /// The name of the serial port (try `taptap list-serial-ports`)
+    /// The name of the serial port (try `taptap list-serial-ports`) of the Modbus-to-serial device (mutually exclusive to --tcp)
     #[arg(long, group = "mode", value_name = "SERIAL-PORT")]
     #[cfg(feature = "serialport")]
     serial: Option<String>,
 
-    /// The IP or hostname which is providing serial-over-TCP service
+    /// The IP or hostname of the device which is providing Modbus-over-TCP service
     #[arg(long, group = "mode", value_name = "DESTINATION")]
     tcp: Option<String>,
 
-    // If --tcp is specified, the port to which to connect
-    #[arg(long, requires = "tcp", default_value_t = 7160)]
+    /// If --tcp is specified, the port to which to connect (default is 502)
+    #[arg(long, requires = "tcp", default_value = Some("502"))]
     port: u16,
+
+    /// If --tcp is specified, the idle time in seconds before keepalive probes are sent (default is 30s)
+    #[arg(long, requires = "tcp", default_value = Some("30"))]
+    keepalive_idle: u64,
+
+    /// If --tcp is specified, the interval between individual keepalive probes in seconds (default is 10s)
+    #[arg(long, requires = "tcp", default_value = Some("10"))]
+    keepalive_interval: u64,
+
+    /// If --tcp is specified, the number of unacknowledged TCP probes before the connection is considered dead (default is 5)
+    #[arg(long, requires = "tcp", default_value = Some("5"))]
+    keepalive_count: u32,
 }
 
 impl Source {
@@ -94,6 +106,9 @@ impl From<Source> for config::SourceConfig {
                 hostname: name,
                 port: value.port,
                 mode: config::ConnectionMode::ReadOnly,
+                keepalive_idle: value.keepalive_idle,
+                keepalive_interval: value.keepalive_interval,
+                keepalive_count: value.keepalive_count,
             }
             .into(),
             _ => {
