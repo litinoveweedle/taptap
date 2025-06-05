@@ -7,7 +7,6 @@ use std::net::{TcpStream, ToSocketAddrs};
 pub struct Connection {
     socket: TcpStream,
     readonly: bool,
-    keepalive: TcpKeepaliveConfig,
 }
 
 impl Connection {
@@ -23,7 +22,6 @@ impl Connection {
         Ok(Self {
             socket,
             readonly,
-            keepalive,
         })
     }
 }
