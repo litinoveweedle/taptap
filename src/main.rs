@@ -64,19 +64,19 @@ struct Source {
     #[arg(long, group = "mode", value_name = "DESTINATION")]
     tcp: Option<String>,
 
-    // If --tcp is specified, the port to which to connect
+    /// If --tcp is specified, the port to which to connect
     #[arg(long, requires = "tcp", default_value = Some("7160"))]
     port: u16,
 
-    // If --tcp is specified, the idle time before keepalive probes are sent.
+    /// If --tcp is specified, the idle time in seconds before keepalive probes are sent.
     #[arg(long, requires = "tcp", default_value = Some("30"))]
     keepalive_idle: u64,
 
-    // If --tcp is specified, the interval between individual keepalive probes.
+    /// If --tcp is specified, the interval between individual keepalive probes in seconds.
     #[arg(long, requires = "tcp", default_value = Some("10"))]
     keepalive_interval: u64,
 
-    // If --tcp is specified, the number of unacknowledged probes before the connection is considered dead.
+    /// If --tcp is specified, the number of unacknowledged probes before the connection is considered dead.
     #[arg(long, requires = "tcp", default_value = Some("5"))]
     keepalive_count: u32,
 }
