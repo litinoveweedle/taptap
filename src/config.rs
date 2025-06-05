@@ -24,8 +24,13 @@ impl SourceConfig {
                     ConnectionMode::ReadWrite => false,
                     ConnectionMode::ReadOnly => true,
                 };
+                let keepalive = KeepaliveConfig {
+                    idle: config.keepalive_idle, 
+                    interval: config.keepalive_interval,
+                    count: config.keepalive_count
+                };
 
-                let conn = gateway::physical::tcp::Connection::connect(addr, readonly)?;
+                let conn = gateway::physical::tcp::Connection::connect(addr, readonly, keepalive)?;
                 Ok(Box::new(conn))
             }
         }
@@ -49,6 +54,15 @@ pub struct TcpConnectionConfig {
     #[serde(default = "default_port")]
     pub port: u16,
     pub mode: ConnectionMode,
+    // Idle time before keepalive probes are sent.
+    #[serde(default = "default_keepalive_idle")]
+    pub keepalive_idle: std::time::Duration,
+    /// Interval between individual keepalive probes.
+    #[serde(default = "default_keepalive_interval")]
+    pub keepalive_interval: std::time::Duration,
+    /// Number of unacknowledged probes before the connection is considered dead.
+    #[serde(default = "default_keepalive_count")]
+    pub keepalive_count: u32,
 }
 impl From<TcpConnectionConfig> for SourceConfig {
     fn from(value: TcpConnectionConfig) -> Self {
@@ -59,6 +73,19 @@ impl From<TcpConnectionConfig> for SourceConfig {
 fn default_port() -> u16 {
     7160
 }
+
+fn default_default_keepalive_idle() -> std::time::Duration {
+    30
+}
+
+fn default_default_keepalive_interval() -> std::time::Duration {
+    10
+}
+
+fn default_default_keepalive_count() -> u32 {
+    5
+}
+
 
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
 pub enum ConnectionMode {
