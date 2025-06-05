@@ -80,7 +80,7 @@ pub struct TcpKeepaliveConfig {
 }
 
 fn default_port() -> u16 {
-    7160
+    502
 }
 
 fn default_keepalive_idle() -> u64 {
