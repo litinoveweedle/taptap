@@ -65,20 +65,20 @@ struct Source {
     tcp: Option<String>,
 
     // If --tcp is specified, the port to which to connect
-    #[arg(long, requires = "tcp", default_value_t = 7160)]
-    port: Option<u16>,
+    #[arg(long, requires = "tcp", default_value = Some("7160"))]
+    port: u16,
 
     // If --tcp is specified, the idle time before keepalive probes are sent.
-    #[arg(long, requires = "tcp", default_value_t = 30)]
-    keepalive_idle: Option<u32>,
+    #[arg(long, requires = "tcp", default_value = Some("30"))]
+    keepalive_idle: u64,
 
     // If --tcp is specified, the interval between individual keepalive probes.
-    #[arg(long, requires = "tcp", default_value_t = 10)]
-    keepalive_interval: Option<u32>,
+    #[arg(long, requires = "tcp", default_value = Some("10"))]
+    keepalive_interval: u64,
 
     // If --tcp is specified, the number of unacknowledged probes before the connection is considered dead.
-    #[arg(long, requires = "tcp", default_value_t = 5)]
-    keepalive_count: Option<u32>,
+    #[arg(long, requires = "tcp", default_value = Some("5"))]
+    keepalive_count: u32,
 }
 
 impl Source {
@@ -108,7 +108,7 @@ impl From<Source> for config::SourceConfig {
                 mode: config::ConnectionMode::ReadOnly,
                 keepalive_idle: value.keepalive_idle,
                 keepalive_interval: value.keepalive_interval,
-                keepalive_count: keepalive_count,
+                keepalive_count: value.keepalive_count,
             }
             .into(),
             _ => {
