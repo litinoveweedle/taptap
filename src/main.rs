@@ -107,6 +107,84 @@ impl Source {
     }
 }
 
+fn read_from_source<F>(source: Source, mut callback: F)
+where
+    F: FnMut(&[u8]),
+{
+    let reconnect_timeout = Duration::from_secs(source.reconnect_timeout);
+    let reconnect_delay = Duration::from_secs(source.reconnect_delay);
+    let mut reconnect_retry = 0;
+
+    loop {
+        let mut buffer = [0u8; 1024];
+
+        log::info!("opening source connection...");
+        let mut conn = source.open();
+        log::info!("source opened, entering read loop");
+
+        let mut last_received = Instant::now();
+
+        loop {
+            let slice;
+            match conn.read(&mut buffer) {
+                Ok(n) => {
+                    if n == 0 {
+                        log::warn!("connection closed by peer, will reconnect");
+                        break; // outer loop will reopen
+                    }
+                    last_received = Instant::now();
+                    reconnect_retry = 0;
+                    slice = &buffer[..n];
+                }
+                Err(e) => match e.kind() {
+                    ErrorKind::TimedOut | ErrorKind::WouldBlock => {
+                        if source.reconnect_timeout == 0
+                            || last_received.elapsed() < reconnect_timeout
+                        {
+                            // temporary, continue reading
+                            continue;
+                        } else {
+                            log::warn!(
+                                "no data for {:?}, reconnecting (idle timeout)",
+                                reconnect_timeout
+                            );
+                            reconnect_retry += 1;
+                            if source.reconnect_retry != 0
+                                && reconnect_retry > source.reconnect_retry
+                            {
+                                log::warn!(
+                                    "maximum reconnect retries ({}) exceeded, exiting",
+                                    source.reconnect_retry
+                                );
+                                exit(3);
+                            } else {
+                                log::info!(
+                                    "reconnect retry {}/{}",
+                                    reconnect_retry,
+                                    if source.reconnect_retry == 0 {
+                                        "∞".to_string()
+                                    } else {
+                                        source.reconnect_retry.to_string()
+                                    }
+                                );
+                            }
+                            break;
+                        }
+                    }
+                    ErrorKind::Interrupted => continue,
+                    _ => {
+                        log::error!("error reading: {}, will reconnect", e);
+                        break;
+                    }
+                },
+            };
+            callback(slice);
+        }
+        log::info!("reconnecting in {:?}...", reconnect_delay);
+        sleep(reconnect_delay);
+    }
+}
+
 impl From<Source> for config::SourceConfig {
     fn from(value: Source) -> Self {
         #[cfg(feature = "serialport")]
@@ -162,99 +240,26 @@ fn main() {
 }
 
 fn peek_bytes(source: Source, raw: bool) {
-    let reconnect_timeout = Duration::from_secs(source.reconnect_timeout);
-    let reconnect_delay = Duration::from_secs(source.reconnect_delay);
-    let mut reconnect_retry = 0;
-
-    loop {
-        let mut buffer = [0u8; 1024];
-        let mut last_was_7e = false;
-
-        log::info!("opening source connection...");
-        let mut conn = source.open();
-        log::info!("source opened, entering read loop");
-
-        let mut last_received = Instant::now();
-
-        loop {
-            let slice;
-            match conn.read(&mut buffer) {
-                Ok(n) => {
-                    if n == 0 {
-                        log::warn!("connection closed by peer, will reconnect");
-                        break; // outer loop will reopen
-                    }
-                    last_received = Instant::now();
-                    reconnect_retry = 0;
-                    slice = &buffer[..n];
-                }
-                Err(e) => match e.kind() {
-                    ErrorKind::TimedOut | ErrorKind::WouldBlock => {
-                        if source.reconnect_timeout == 0
-                            || last_received.elapsed() < reconnect_timeout
-                        {
-                            // temporary, continue reading
-                            continue;
-                        } else {
-                            log::warn!(
-                                "no data for {:?}, reconnecting (idle timeout)",
-                                reconnect_timeout
-                            );
-                            reconnect_retry += 1;
-                            if source.reconnect_retry != 0
-                                && reconnect_retry > source.reconnect_retry
-                            {
-                                log::warn!(
-                                    "maximum reconnect retries ({}) exceeded, exiting",
-                                    source.reconnect_retry
-                                );
-                                exit(3);
-                            } else {
-                                log::info!(
-                                    "reconnect retry {}/{}",
-                                    reconnect_retry,
-                                    if source.reconnect_retry == 0 {
-                                        "∞".to_string()
-                                    } else {
-                                        source.reconnect_retry.to_string()
-                                    }
-                                );
-                            }
-                            break;
-                        }
-                    }
-                    ErrorKind::Interrupted => continue,
-                    _ => {
-                        log::error!("error reading: {}, will reconnect", e);
-                        break;
-                    }
-                },
-            };
-
-            let mut out = std::io::stdout().lock();
-            if raw {
-                out.write_all(slice).unwrap();
-            } else {
-                let mut formatted = Vec::with_capacity(4 * slice.len());
-                for byte in slice {
-                    let sep = if last_was_7e && *byte == 0x08 {
-                        '\n'
-                    } else {
-                        ' '
-                    };
-                    write!(&mut formatted, "{:02X}{}", byte, sep).unwrap();
-                    last_was_7e = *byte == 0x7e;
-                }
-
-                out.write_all(formatted.as_slice()).unwrap();
+    read_from_source(source, |slice| {
+        let mut out = std::io::stdout().lock();
+        if raw {
+            out.write_all(slice).unwrap();
+        } else {
+            let mut formatted = Vec::with_capacity(4 * slice.len());
+            let mut last_was_7e = false;
+            for byte in slice {
+                let sep = if last_was_7e && *byte == 0x08 {
+                    '\n'
+                } else {
+                    ' '
+                };
+                write!(&mut formatted, "{:02X}{}", byte, sep).unwrap();
+                last_was_7e = *byte == 0x7e;
             }
-            out.flush().unwrap();
+            out.write_all(formatted.as_slice()).unwrap();
         }
-
-        // attempt to reconnect after a short delay
-        log::info!("reconnecting in {:?}...", reconnect_delay);
-        sleep(reconnect_delay);
-    }
+        out.flush().unwrap();
+    });
 }
 
 fn peek_frames(source: Source) {
@@ -264,82 +269,8 @@ fn peek_frames(source: Source) {
             println!("{:?}", frame);
         }
     }
-
     let mut rx = taptap::gateway::link::Receiver::new(Sink);
-
-    let reconnect_timeout = Duration::from_secs(source.reconnect_timeout);
-    let reconnect_delay = Duration::from_secs(source.reconnect_delay);
-    let mut reconnect_retry = 0;
-
-    loop {
-        let mut buffer = [0u8; 1024];
-
-        log::info!("opening source connection...");
-        let mut conn = source.open();
-        log::info!("source opened, entering read loop");
-
-        let mut last_received = Instant::now();
-
-        loop {
-            let slice;
-            match conn.read(&mut buffer) {
-                Ok(n) => {
-                    if n == 0 {
-                        log::warn!("connection closed by peer, will reconnect");
-                        break; // outer loop will reopen
-                    }
-                    last_received = Instant::now();
-                    reconnect_retry = 0;
-                    slice = &buffer[..n];
-                }
-                Err(e) => match e.kind() {
-                    ErrorKind::TimedOut | ErrorKind::WouldBlock => {
-                        if source.reconnect_timeout == 0
-                            || last_received.elapsed() < reconnect_timeout
-                        {
-                            // temporary, continue reading
-                            continue;
-                        } else {
-                            log::warn!(
-                                "no data for {:?}, reconnecting (idle timeout)",
-                                reconnect_timeout
-                            );
-                            reconnect_retry += 1;
-                            if source.reconnect_retry != 0
-                                && reconnect_retry > source.reconnect_retry
-                            {
-                                log::warn!(
-                                    "maximum reconnect retries ({}) exceeded, exiting",
-                                    source.reconnect_retry
-                                );
-                                exit(3);
-                            } else {
-                                log::info!(
-                                    "reconnect retry {}/{}",
-                                    reconnect_retry,
-                                    if source.reconnect_retry == 0 {
-                                        "∞".to_string()
-                                    } else {
-                                        source.reconnect_retry.to_string()
-                                    }
-                                );
-                            }
-                            break;
-                        }
-                    }
-                    ErrorKind::Interrupted => continue,
-                    _ => {
-                        log::error!("error reading: {}, will reconnect", e);
-                        break;
-                    }
-                },
-            };
-            rx.extend_from_slice(slice);
-        }
-        // attempt to reconnect after a short delay
-        log::info!("reconnecting in {:?}...", reconnect_delay);
-        sleep(reconnect_delay);
-    }
+    read_from_source(source, |slice| rx.extend_from_slice(slice));
 }
 
 fn peek_activity(source: Source) {
@@ -497,79 +428,7 @@ fn peek_activity(source: Source) {
         pv::application::Receiver::new(Sink::default()),
     ));
 
-    let reconnect_timeout = Duration::from_secs(source.reconnect_timeout);
-    let reconnect_delay = Duration::from_secs(source.reconnect_delay);
-    let mut reconnect_retry = 0;
-
-    loop {
-        let mut buffer = [0u8; 1024];
-
-        log::info!("opening source connection...");
-        let mut conn = source.open();
-        log::info!("source opened, entering read loop");
-
-        let mut last_received = Instant::now();
-
-        loop {
-            let slice;
-            match conn.read(&mut buffer) {
-                Ok(n) => {
-                    if n == 0 {
-                        log::warn!("connection closed by peer, will reconnect");
-                        break; // outer loop will reopen
-                    }
-                    last_received = Instant::now();
-                    reconnect_retry = 0;
-                    slice = &buffer[..n];
-                }
-                Err(e) => match e.kind() {
-                    ErrorKind::TimedOut | ErrorKind::WouldBlock => {
-                        if source.reconnect_timeout == 0
-                            || last_received.elapsed() < reconnect_timeout
-                        {
-                            // temporary, continue reading
-                            continue;
-                        } else {
-                            log::warn!(
-                                "no data for {:?}, reconnecting (idle timeout)",
-                                reconnect_timeout
-                            );
-                            reconnect_retry += 1;
-                            if source.reconnect_retry != 0
-                                && reconnect_retry > source.reconnect_retry
-                            {
-                                log::warn!(
-                                    "maximum reconnect retries ({}) exceeded, exiting",
-                                    source.reconnect_retry
-                                );
-                                exit(3);
-                            } else {
-                                log::info!(
-                                    "reconnect retry {}/{}",
-                                    reconnect_retry,
-                                    if source.reconnect_retry == 0 {
-                                        "∞".to_string()
-                                    } else {
-                                        source.reconnect_retry.to_string()
-                                    }
-                                );
-                            }
-                            break;
-                        }
-                    }
-                    ErrorKind::Interrupted => continue,
-                    _ => {
-                        log::error!("error reading: {}, will reconnect", e);
-                        break;
-                    }
-                },
-            };
-            rx.extend_from_slice(slice);
-        }
-        // attempt to reconnect after a short delay
-        log::info!("reconnecting in {:?}...", reconnect_delay);
-        sleep(reconnect_delay);
-    }
+    read_from_source(source, |slice| rx.extend_from_slice(slice));
 }
 
 fn observe(source: Source) {
@@ -577,80 +436,7 @@ fn observe(source: Source) {
     let mut rx = gateway::link::Receiver::new(gateway::transport::Receiver::new(
         pv::application::Receiver::new(observer),
     ));
-
-    let reconnect_timeout = Duration::from_secs(source.reconnect_timeout);
-    let reconnect_delay = Duration::from_secs(source.reconnect_delay);
-    let mut reconnect_retry = 0;
-
-    loop {
-        let mut buffer = [0u8; 1024];
-
-        log::info!("opening source connection...");
-        let mut conn = source.open();
-        log::info!("source opened, entering read loop");
-
-        let mut last_received = Instant::now();
-
-        loop {
-            let slice;
-            match conn.read(&mut buffer) {
-                Ok(n) => {
-                    if n == 0 {
-                        log::warn!("connection closed by peer, will reconnect");
-                        break; // outer loop will reopen
-                    }
-                    last_received = Instant::now();
-                    reconnect_retry = 0;
-                    slice = &buffer[..n];
-                }
-                Err(e) => match e.kind() {
-                    ErrorKind::TimedOut | ErrorKind::WouldBlock => {
-                        if source.reconnect_timeout == 0
-                            || last_received.elapsed() < reconnect_timeout
-                        {
-                            // temporary, continue reading
-                            continue;
-                        } else {
-                            log::warn!(
-                                "no data for {:?}, reconnecting (idle timeout)",
-                                reconnect_timeout
-                            );
-                            reconnect_retry += 1;
-                            if source.reconnect_retry != 0
-                                && reconnect_retry > source.reconnect_retry
-                            {
-                                log::warn!(
-                                    "maximum reconnect retries ({}) exceeded, exiting",
-                                    source.reconnect_retry
-                                );
-                                exit(3);
-                            } else {
-                                log::info!(
-                                    "reconnect retry {}/{}",
-                                    reconnect_retry,
-                                    if source.reconnect_retry == 0 {
-                                        "∞".to_string()
-                                    } else {
-                                        source.reconnect_retry.to_string()
-                                    }
-                                );
-                            }
-                            break;
-                        }
-                    }
-                    ErrorKind::Interrupted => continue,
-                    _ => {
-                        log::error!("error reading: {}, will reconnect", e);
-                        break;
-                    }
-                },
-            };
-            rx.extend_from_slice(slice);
-        }
-        // attempt to reconnect after a short delay
-        log::info!("reconnecting in {:?}...", reconnect_delay);
-        sleep(reconnect_delay);
-    }
+    read_from_source(source, |slice| rx.extend_from_slice(slice));
 }
 
 #[cfg(feature = "serialport")]
