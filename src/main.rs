@@ -2,11 +2,10 @@ use clap::{Args, Parser, Subcommand};
 use log::LevelFilter;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::io::{Read, Write, ErrorKind};
+use std::io::{ErrorKind, Read, Write};
 use std::process::exit;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use taptap::gateway::physical::Connection;
 use taptap::gateway::{physical, Frame, GatewayID};
 use taptap::pv::application::{NodeTableResponseEntry, PowerReport, TopologyReport};
 use taptap::pv::network::{NodeAddress, ReceivedPacketHeader};
@@ -67,15 +66,15 @@ struct Source {
     tcp: Option<String>,
 
     /// The time after which connection is re-established if no data is received (in seconds, 0 = no timeout)
-    #[arg(long, default_value = Some(0))]
+    #[arg(long, default_value = Some("0"))]
     reconnect_timeout: u64,
 
     /// The delay between reconnect attempts (in seconds, default 5s)
-    #[arg(long, default_value = Some(5))]
+    #[arg(long, default_value = Some("5"))]
     reconnect_delay: u64,
 
     /// The number of times to retry reconnecting before giving up (0 = infinite)
-    #[arg(long, default_value = Some(0))]
+    #[arg(long, default_value = Some("0"))]
     reconnect_retry: u32,
 
     /// If --tcp is specified, the port to which to connect (default is 502)
@@ -153,9 +152,7 @@ fn main() {
             peek_activity(source);
         }
 
-        Commands::Observe { source } => {
-            observe(source)
-        }
+        Commands::Observe { source } => observe(source),
 
         #[cfg(feature = "serialport")]
         Commands::ListSerialPorts => {
@@ -180,7 +177,7 @@ fn peek_bytes(source: Source, raw: bool) {
         let mut last_received = Instant::now();
 
         loop {
-            slice = match conn.read(&mut buffer) {
+            match conn.read(&mut buffer) {
                 Ok(n) => {
                     if n == 0 {
                         log::warn!("connection closed by peer, will reconnect");
@@ -189,6 +186,7 @@ fn peek_bytes(source: Source, raw: bool) {
                     last_received = Instant::now();
                     reconnect_retry = 0;
 
+                    let slice = &buffer[..n];
                     let mut out = std::io::stdout().lock();
                     if raw {
                         out.write_all(slice).unwrap();
@@ -210,7 +208,9 @@ fn peek_bytes(source: Source, raw: bool) {
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
-                        if reconnect_timeout == 0 or last_received.elapsed() < reconnect_timeout {
+                        if source.reconnect_timeout == 0
+                            || last_received.elapsed() < reconnect_timeout
+                        {
                             // temporary, continue reading
                             continue;
                         } else {
@@ -218,7 +218,7 @@ fn peek_bytes(source: Source, raw: bool) {
                                 "no data for {:?}, reconnecting (idle timeout)",
                                 reconnect_timeout
                             );
-                            reconnect_retry =++;
+                            reconnect_retry += 1;
                             if reconnect_retry > source.reconnect_retry {
                                 log::warn!(
                                     "maximum reconnect retries ({}) exceeded, exiting",
@@ -234,9 +234,13 @@ fn peek_bytes(source: Source, raw: bool) {
                         log::error!("error reading: {}, will reconnect", e);
                         break;
                     }
-                }
-            }
+                },
+            };
         }
+
+        // attempt to reconnect after a short delay
+        log::info!("reconnecting in {:?}...", reconnect_delay);
+        sleep(reconnect_delay);
     }
 }
 
@@ -264,7 +268,7 @@ fn peek_frames(source: Source) {
         let mut last_received = Instant::now();
 
         loop {
-            slice = match conn.read(&mut buffer) {
+            match conn.read(&mut buffer) {
                 Ok(n) => {
                     if n == 0 {
                         log::warn!("connection closed by peer, will reconnect");
@@ -272,11 +276,13 @@ fn peek_frames(source: Source) {
                     }
                     last_received = Instant::now();
                     reconnect_retry = 0;
-                    rx.extend_from_slice(slice);
+                    rx.extend_from_slice(&buffer[..n]);
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
-                        if reconnect_timeout == 0 or last_received.elapsed() < reconnect_timeout {
+                        if source.reconnect_timeout == 0
+                            || last_received.elapsed() < reconnect_timeout
+                        {
                             // temporary, continue reading
                             continue;
                         } else {
@@ -284,7 +290,7 @@ fn peek_frames(source: Source) {
                                 "no data for {:?}, reconnecting (idle timeout)",
                                 reconnect_timeout
                             );
-                            reconnect_retry =++;
+                            reconnect_retry += 1;
                             if reconnect_retry > source.reconnect_retry {
                                 log::warn!(
                                     "maximum reconnect retries ({}) exceeded, exiting",
@@ -300,13 +306,17 @@ fn peek_frames(source: Source) {
                         log::error!("error reading: {}, will reconnect", e);
                         break;
                     }
-                }
-            }
+                },
+            };
         }
+
+        // attempt to reconnect after a short delay
+        log::info!("reconnecting in {:?}...", reconnect_delay);
+        sleep(reconnect_delay);
     }
 }
 
-fn peek_activity(mut conn: Box<dyn physical::Connection>) {
+fn peek_activity(source: Source) {
     #[derive(Default)]
     struct Sink {
         slot_counters: BTreeMap<GatewayID, SlotCounter>,
@@ -475,7 +485,7 @@ fn peek_activity(mut conn: Box<dyn physical::Connection>) {
         let mut last_received = Instant::now();
 
         loop {
-            slice = match conn.read(&mut buffer) {
+            match conn.read(&mut buffer) {
                 Ok(n) => {
                     if n == 0 {
                         log::warn!("connection closed by peer, will reconnect");
@@ -483,11 +493,13 @@ fn peek_activity(mut conn: Box<dyn physical::Connection>) {
                     }
                     last_received = Instant::now();
                     reconnect_retry = 0;
-                    rx.extend_from_slice(slice);
+                    rx.extend_from_slice(&buffer[..n]);
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
-                        if reconnect_timeout == 0 or last_received.elapsed() < reconnect_timeout {
+                        if source.reconnect_timeout == 0
+                            || last_received.elapsed() < reconnect_timeout
+                        {
                             // temporary, continue reading
                             continue;
                         } else {
@@ -495,7 +507,7 @@ fn peek_activity(mut conn: Box<dyn physical::Connection>) {
                                 "no data for {:?}, reconnecting (idle timeout)",
                                 reconnect_timeout
                             );
-                            reconnect_retry =++;
+                            reconnect_retry += 1;
                             if reconnect_retry > source.reconnect_retry {
                                 log::warn!(
                                     "maximum reconnect retries ({}) exceeded, exiting",
@@ -504,16 +516,20 @@ fn peek_activity(mut conn: Box<dyn physical::Connection>) {
                                 exit(3);
                             }
                             break;
-                        } 
+                        }
                     }
                     ErrorKind::Interrupted => continue,
                     _ => {
                         log::error!("error reading: {}, will reconnect", e);
                         break;
                     }
-                }
-            }
+                },
+            };
         }
+
+        // attempt to reconnect after a short delay
+        log::info!("reconnecting in {:?}...", reconnect_delay);
+        sleep(reconnect_delay);
     }
 }
 
@@ -537,7 +553,7 @@ fn observe(source: Source) {
         let mut last_received = Instant::now();
 
         loop {
-            slice = match conn.read(&mut buffer) {
+            match conn.read(&mut buffer) {
                 Ok(n) => {
                     if n == 0 {
                         log::warn!("connection closed by peer, will reconnect");
@@ -545,11 +561,13 @@ fn observe(source: Source) {
                     }
                     last_received = Instant::now();
                     reconnect_retry = 0;
-                    rx.extend_from_slice(slice);
+                    rx.extend_from_slice(&buffer[..n]);
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
-                        if reconnect_timeout == 0 or last_received.elapsed() < reconnect_timeout {
+                        if source.reconnect_timeout == 0
+                            || last_received.elapsed() < reconnect_timeout
+                        {
                             // temporary, continue reading
                             continue;
                         } else {
@@ -557,7 +575,7 @@ fn observe(source: Source) {
                                 "no data for {:?}, reconnecting (idle timeout)",
                                 reconnect_timeout
                             );
-                            reconnect_retry =++;
+                            reconnect_retry += 1;
                             if reconnect_retry > source.reconnect_retry {
                                 log::warn!(
                                     "maximum reconnect retries ({}) exceeded, exiting",
@@ -573,11 +591,11 @@ fn observe(source: Source) {
                         log::error!("error reading: {}, will reconnect", e);
                         break;
                     }
-                }
-            }
+                },
+            };
         }
 
-        // attempt to reconnect after a short backoff
+        // attempt to reconnect after a short delay
         log::info!("reconnecting in {:?}...", reconnect_delay);
         sleep(reconnect_delay);
     }
