@@ -65,17 +65,17 @@ struct Source {
     #[arg(long, group = "mode", value_name = "DESTINATION")]
     tcp: Option<String>,
 
-    /// The time after which connection is re-established if no data is received (in seconds, 0 = no timeout)
+    /// The time after which connection is re-established if no data is received in seconds (default is 0s, i.e. no timeout)
     #[arg(long, default_value = Some("0"))]
     reconnect_timeout: u64,
 
-    /// The delay between reconnect attempts (in seconds, default 5s)
-    #[arg(long, default_value = Some("5"))]
-    reconnect_delay: u64,
-
-    /// The number of times to retry reconnecting before giving up (0 = infinite)
+    /// The number of times to retry reconnecting before giving up (default is 0, i.e. infinite retries)
     #[arg(long, default_value = Some("0"))]
     reconnect_retry: u32,
+
+    /// The delay between reconnect attempts in seconds (default is 5s)
+    #[arg(long, default_value = Some("5"))]
+    reconnect_delay: u64,
 
     /// If --tcp is specified, the port to which to connect (default is 502)
     #[arg(long, requires = "tcp", default_value = Some("502"))]
@@ -177,6 +177,7 @@ fn peek_bytes(source: Source, raw: bool) {
         let mut last_received = Instant::now();
 
         loop {
+            let slice;
             match conn.read(&mut buffer) {
                 Ok(n) => {
                     if n == 0 {
@@ -185,26 +186,7 @@ fn peek_bytes(source: Source, raw: bool) {
                     }
                     last_received = Instant::now();
                     reconnect_retry = 0;
-
-                    let slice = &buffer[..n];
-                    let mut out = std::io::stdout().lock();
-                    if raw {
-                        out.write_all(slice).unwrap();
-                    } else {
-                        let mut formatted = Vec::with_capacity(4 * slice.len());
-                        for byte in slice {
-                            let sep = if last_was_7e && *byte == 0x08 {
-                                '\n'
-                            } else {
-                                ' '
-                            };
-                            write!(&mut formatted, "{:02X}{}", byte, sep).unwrap();
-                            last_was_7e = *byte == 0x7e;
-                        }
-
-                        out.write_all(formatted.as_slice()).unwrap();
-                    }
-                    out.flush().unwrap();
+                    slice = &buffer[..n];
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
@@ -219,12 +201,24 @@ fn peek_bytes(source: Source, raw: bool) {
                                 reconnect_timeout
                             );
                             reconnect_retry += 1;
-                            if reconnect_retry > source.reconnect_retry {
+                            if source.reconnect_retry != 0
+                                && reconnect_retry > source.reconnect_retry
+                            {
                                 log::warn!(
                                     "maximum reconnect retries ({}) exceeded, exiting",
                                     source.reconnect_retry
                                 );
                                 exit(3);
+                            } else {
+                                log::info!(
+                                    "reconnect retry {}/{}",
+                                    reconnect_retry,
+                                    if source.reconnect_retry == 0 {
+                                        "∞".to_string()
+                                    } else {
+                                        source.reconnect_retry.to_string()
+                                    }
+                                );
                             }
                             break;
                         }
@@ -236,6 +230,25 @@ fn peek_bytes(source: Source, raw: bool) {
                     }
                 },
             };
+
+            let mut out = std::io::stdout().lock();
+            if raw {
+                out.write_all(slice).unwrap();
+            } else {
+                let mut formatted = Vec::with_capacity(4 * slice.len());
+                for byte in slice {
+                    let sep = if last_was_7e && *byte == 0x08 {
+                        '\n'
+                    } else {
+                        ' '
+                    };
+                    write!(&mut formatted, "{:02X}{}", byte, sep).unwrap();
+                    last_was_7e = *byte == 0x7e;
+                }
+
+                out.write_all(formatted.as_slice()).unwrap();
+            }
+            out.flush().unwrap();
         }
 
         // attempt to reconnect after a short delay
@@ -268,6 +281,7 @@ fn peek_frames(source: Source) {
         let mut last_received = Instant::now();
 
         loop {
+            let slice;
             match conn.read(&mut buffer) {
                 Ok(n) => {
                     if n == 0 {
@@ -276,7 +290,7 @@ fn peek_frames(source: Source) {
                     }
                     last_received = Instant::now();
                     reconnect_retry = 0;
-                    rx.extend_from_slice(&buffer[..n]);
+                    slice = &buffer[..n];
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
@@ -291,12 +305,24 @@ fn peek_frames(source: Source) {
                                 reconnect_timeout
                             );
                             reconnect_retry += 1;
-                            if reconnect_retry > source.reconnect_retry {
+                            if source.reconnect_retry != 0
+                                && reconnect_retry > source.reconnect_retry
+                            {
                                 log::warn!(
                                     "maximum reconnect retries ({}) exceeded, exiting",
                                     source.reconnect_retry
                                 );
                                 exit(3);
+                            } else {
+                                log::info!(
+                                    "reconnect retry {}/{}",
+                                    reconnect_retry,
+                                    if source.reconnect_retry == 0 {
+                                        "∞".to_string()
+                                    } else {
+                                        source.reconnect_retry.to_string()
+                                    }
+                                );
                             }
                             break;
                         }
@@ -308,8 +334,8 @@ fn peek_frames(source: Source) {
                     }
                 },
             };
+            rx.extend_from_slice(slice);
         }
-
         // attempt to reconnect after a short delay
         log::info!("reconnecting in {:?}...", reconnect_delay);
         sleep(reconnect_delay);
@@ -485,6 +511,7 @@ fn peek_activity(source: Source) {
         let mut last_received = Instant::now();
 
         loop {
+            let slice;
             match conn.read(&mut buffer) {
                 Ok(n) => {
                     if n == 0 {
@@ -493,7 +520,7 @@ fn peek_activity(source: Source) {
                     }
                     last_received = Instant::now();
                     reconnect_retry = 0;
-                    rx.extend_from_slice(&buffer[..n]);
+                    slice = &buffer[..n];
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
@@ -508,12 +535,24 @@ fn peek_activity(source: Source) {
                                 reconnect_timeout
                             );
                             reconnect_retry += 1;
-                            if reconnect_retry > source.reconnect_retry {
+                            if source.reconnect_retry != 0
+                                && reconnect_retry > source.reconnect_retry
+                            {
                                 log::warn!(
                                     "maximum reconnect retries ({}) exceeded, exiting",
                                     source.reconnect_retry
                                 );
                                 exit(3);
+                            } else {
+                                log::info!(
+                                    "reconnect retry {}/{}",
+                                    reconnect_retry,
+                                    if source.reconnect_retry == 0 {
+                                        "∞".to_string()
+                                    } else {
+                                        source.reconnect_retry.to_string()
+                                    }
+                                );
                             }
                             break;
                         }
@@ -525,8 +564,8 @@ fn peek_activity(source: Source) {
                     }
                 },
             };
+            rx.extend_from_slice(slice);
         }
-
         // attempt to reconnect after a short delay
         log::info!("reconnecting in {:?}...", reconnect_delay);
         sleep(reconnect_delay);
@@ -553,6 +592,7 @@ fn observe(source: Source) {
         let mut last_received = Instant::now();
 
         loop {
+            let slice;
             match conn.read(&mut buffer) {
                 Ok(n) => {
                     if n == 0 {
@@ -561,7 +601,7 @@ fn observe(source: Source) {
                     }
                     last_received = Instant::now();
                     reconnect_retry = 0;
-                    rx.extend_from_slice(&buffer[..n]);
+                    slice = &buffer[..n];
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
@@ -576,12 +616,24 @@ fn observe(source: Source) {
                                 reconnect_timeout
                             );
                             reconnect_retry += 1;
-                            if reconnect_retry > source.reconnect_retry {
+                            if source.reconnect_retry != 0
+                                && reconnect_retry > source.reconnect_retry
+                            {
                                 log::warn!(
                                     "maximum reconnect retries ({}) exceeded, exiting",
                                     source.reconnect_retry
                                 );
                                 exit(3);
+                            } else {
+                                log::info!(
+                                    "reconnect retry {}/{}",
+                                    reconnect_retry,
+                                    if source.reconnect_retry == 0 {
+                                        "∞".to_string()
+                                    } else {
+                                        source.reconnect_retry.to_string()
+                                    }
+                                );
                             }
                             break;
                         }
@@ -593,8 +645,8 @@ fn observe(source: Source) {
                     }
                 },
             };
+            rx.extend_from_slice(slice);
         }
-
         // attempt to reconnect after a short delay
         log::info!("reconnecting in {:?}...", reconnect_delay);
         sleep(reconnect_delay);
