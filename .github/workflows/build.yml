@@ -48,4 +48,5 @@ jobs:
         uses: houseabsolute/actions-rust-release@v0
         with:
           executable-name: taptap
+          changes-file: CHANGELOG.md
           target: ${{ matrix.platform.target }}
