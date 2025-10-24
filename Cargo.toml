@@ -6,7 +6,7 @@ repository = "https://github.com/litinoveweedle/taptap"
 keywords = ["solar", "Tigo"]
 readme = "README.md"
 version = "0.1.2"
-edition = "2025"
+edition = "2021"
 license = "MIT"
 
 [features]
