@@ -58,12 +58,22 @@ enum Commands {
 #[group(id="mode", required = true, multiple = true, args=&["serial", "tcp"])]
 struct Source {
     /// The name of the serial port (try `taptap list-serial-ports`) of the Modbus-to-serial device (mutually exclusive to --tcp)
-    #[arg(long, required = true, conflicts_with = "tcp", value_name = "SERIAL-PORT")]
+    #[arg(
+        long,
+        required = true,
+        conflicts_with = "tcp",
+        value_name = "SERIAL-PORT"
+    )]
     #[cfg(feature = "serialport")]
     serial: Option<String>,
 
     /// The IP or hostname of the device which is providing Modbus-over-TCP service
-    #[arg(long, required = true, conflicts_with = "serial", value_name = "DESTINATION")]
+    #[arg(
+        long,
+        required = true,
+        conflicts_with = "serial",
+        value_name = "DESTINATION"
+    )]
     tcp: Option<String>,
 
     /// If --tcp is specified, the port to which to connect
