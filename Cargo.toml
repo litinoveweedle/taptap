@@ -1,12 +1,12 @@
 [package]
 name = "taptap"
 description = "An implementation of the Tigo TAP protocol"
-authors = ["Will Glynn"]
-repository = "https://github.com/willglynn/taptap"
-keywords = ["solar"]
+authors = ["Will Glynn", "LiTinOveWeedle"]
+repository = "https://github.com/litinoveweedle/taptap"
+keywords = ["solar", "Tigo"]
 readme = "README.md"
-version = "0.1.1"
-edition = "2021"
+version = "0.1.2"
+edition = "2025"
 license = "MIT"
 
 [features]
