@@ -17,6 +17,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+
+## [0.2.0]
+
+### Added
+
+- infrastructure even in observe mode - to output in JSON gateway and nodes addresses, version and barcodes
+- persistent storage for infrastructure data
+
+### Fixed
+
+- invalid NodeTableResponse struct
+
+### Changed
+
+- format of the power report event message - this is breaking change
+- Updated README to reflect recent implementation 
+
+
 ## [0.1.2] - 2025-10-24
 
 ### Added
