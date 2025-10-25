@@ -94,7 +94,10 @@ impl Observer {
         }) {
             Ok(data) => {
                 self.persistent_state = data;
-
+                log::info!(
+                    "persistent state successfully loaded from persistent file {}",
+                    file_path.display()
+                );
                 // Print out infrastructure event
                 let infrastructure_event = PersistentStateEvent::from(&self.persistent_state);
                 println!("{}", serde_json::to_string(&infrastructure_event).unwrap());
@@ -180,7 +183,7 @@ impl Observer {
         println!("{}", serde_json::to_string(&infrastructure_event).unwrap());
 
         log::debug!(
-            "Successfully wrote persistent state to {}",
+            "Successfully wrote persistent state to persistent file {}",
             file_path.display()
         );
     }
