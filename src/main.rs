@@ -3,6 +3,7 @@ use log::LevelFilter;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::io::{ErrorKind, Read, Write};
+use std::path::PathBuf;
 use std::process::exit;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -32,8 +33,8 @@ enum Commands {
         source: Source,
 
         /// Path of the JSON file to provide persistent storage for the infrastructure topology data
-        #[arg(long, required = false, value_name = "FILE", default_value = Some(""))]
-        persistent_file: String,
+        #[arg(long, required = false, value_name = "FILE", default_value = None)]
+        state_file: Option<PathBuf>,
     },
 
     /// Peek at the raw data flowing at the gateway physical layer
@@ -95,18 +96,6 @@ struct Source {
     /// The delay between reconnect attempts in seconds
     #[arg(long, required = false, value_name = "SECONDS", default_value = Some("5"))]
     reconnect_delay: u64,
-
-    /// If --tcp is specified, the idle time in seconds before keepalive probes are sent
-    #[arg(long, required = false, requires = "tcp", conflicts_with = "serial", value_name = "SECONDS", default_value = Some("30"))]
-    keepalive_idle: u64,
-
-    /// If --tcp is specified, the interval between individual keepalive probes in seconds
-    #[arg(long, required = false, requires = "tcp", conflicts_with = "serial", value_name = "SECONDS", default_value = Some("10"))]
-    keepalive_interval: u64,
-
-    /// If --tcp is specified, the number of unacknowledged TCP probes before the connection is considered dead
-    #[arg(long, required = false, requires = "tcp", conflicts_with = "serial", value_name = "SECONDS", default_value = Some("5"))]
-    keepalive_count: u32,
 }
 
 impl Source {
@@ -135,7 +124,7 @@ impl Source {
                     if self.reconnect_retry != 0 && reconnect_retry > self.reconnect_retry {
                         log::warn!(
                             "maximum reconnect retries ({}) exceeded, exiting",
-                            self.reconnect_retry.to_string()
+                            self.reconnect_retry
                         );
                         exit(2);
                     } else {
@@ -231,9 +220,10 @@ impl From<Source> for config::SourceConfig {
                 hostname: name,
                 port: value.port,
                 mode: config::ConnectionMode::ReadOnly,
-                keepalive_idle: value.keepalive_idle,
-                keepalive_interval: value.keepalive_interval,
-                keepalive_count: value.keepalive_count,
+                // hardcode TCP keepalive setting here, might need tuning
+                keepalive_idle: 30,
+                keepalive_interval: 10,
+                keepalive_count: 5,
             }
             .into(),
             _ => {
@@ -264,10 +254,7 @@ fn main() {
             peek_activity(source);
         }
 
-        Commands::Observe {
-            source,
-            persistent_file,
-        } => observe(source, persistent_file),
+        Commands::Observe { source, state_file } => observe(source, state_file),
 
         #[cfg(feature = "serialport")]
         Commands::ListSerialPorts => {
@@ -468,8 +455,8 @@ fn peek_activity(source: Source) {
     source.read(|slice| rx.extend_from_slice(slice));
 }
 
-fn observe(source: Source, persistent_file: String) {
-    let observer = taptap::observer::Observer::new(persistent_file);
+fn observe(source: Source, state_file: Option<PathBuf>) {
+    let observer = taptap::observer::Observer::new(state_file);
     let mut rx = gateway::link::Receiver::new(gateway::transport::Receiver::new(
         pv::application::Receiver::new(observer),
     ));

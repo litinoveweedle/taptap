@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -43,7 +43,7 @@ use slot_clock::SlotClock;
 /// An observer, monitoring a controller interacting with one or more TAPs via an RS-485 interface.
 #[derive(Debug)]
 pub struct Observer {
-    persistent_file: String,
+    state_file: Option<PathBuf>,
     persistent_state: PersistentState,
     enumeration_state: Option<EnumerationState>,
     captured_slot_counters: BTreeMap<GatewayID, SystemTime>,
@@ -53,14 +53,24 @@ pub struct Observer {
 
 impl Default for Observer {
     fn default() -> Self {
-        Observer::new(String::new())
+        Observer::new(None)
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+enum WritePersistentStateError {
+    #[error("error serializing state: {0}")]
+    Serialization(serde_json::Error),
+    #[error("error writing state file: {0}")]
+    Write(io::Error),
+    #[error("error renaming state file: {0}")]
+    Rename(io::Error),
+}
+
 impl Observer {
-    pub fn new(persistent_file: String) -> Self {
+    pub fn new(state_file: Option<PathBuf>) -> Self {
         let mut observer = Observer {
-            persistent_file,
+            state_file,
             persistent_state: PersistentState::default(),
             enumeration_state: None,
             captured_slot_counters: Default::default(),
@@ -74,38 +84,35 @@ impl Observer {
     // If a persistent state JSON file exists, prefer its contents over the provided
     // `persistent_state` argument. This allows the observer to restore previously
     // captured infrastructure information across runs.
-    pub fn read_persistent_state(&mut self) -> () {
-        if self.persistent_file.is_empty() {
+    pub fn read_persistent_state(&mut self) {
+        let Some(path) = &self.state_file else {
             log::info!("persistent file is not specified, will not keep persistent state");
             return;
-        }
-        let file_path = PathBuf::from(&self.persistent_file);
-        if !file_path.is_file() {
-            log::info!(
-                "persistent file: {} not found, starting with empty state",
-                self.persistent_file
-            );
-            return;
-        }
-        match File::open(&file_path).and_then(|mut file| {
-            let mut string = String::new();
-            file.read_to_string(&mut string)?;
-            serde_json::from_str(&string).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        };
+
+        match File::open(path).and_then(|file| {
+            serde_json::from_reader(file).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
         }) {
             Ok(data) => {
                 self.persistent_state = data;
                 log::info!(
                     "persistent state successfully loaded from persistent file {}",
-                    file_path.display()
+                    path.display()
                 );
                 // Print out infrastructure event
                 let infrastructure_event = PersistentStateEvent::from(&self.persistent_state);
                 println!("{}", serde_json::to_string(&infrastructure_event).unwrap());
             }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                log::info!(
+                    "persistent file: {} not found, starting with empty state",
+                    path.display()
+                );
+            }
             Err(e) => {
                 log::warn!(
                     "failed to read persistent state from {}: {}",
-                    self.persistent_file,
+                    path.display(),
                     e
                 );
             }
@@ -115,77 +122,40 @@ impl Observer {
     /// Write the current `persistent_state` to disk as JSON.
     ///
     /// Writes atomically by writing to a temporary file and renaming it into place.
-    pub fn write_persistent_state(&self) -> () {
-        let infrastructure_event = PersistentStateEvent::from(&self.persistent_state);
-        match serde_json::to_string(&infrastructure_event) {
-            Ok(event_str) => println!("{}", event_str),
-            Err(e) => {
-                log::error!("Failed to serialize infrastructure event: {}", e);
-            }
+    pub(crate) fn write_persistent_state(&self) {
+        if let Err(e) = self.try_write_persistent_state() {
+            log::error!("failed to persist state: {}", e);
         }
+    }
 
-        let file_path = PathBuf::from(&self.persistent_file);
+    fn try_write_persistent_state(&self) -> Result<(), WritePersistentStateError> {
+        let Some(file_path) = &self.state_file else {
+            // No state file => nothing to write
+            return Ok(());
+        };
+
         let tmp_path = file_path.with_extension("tmp");
 
         // Serialize
-        let data = match serde_json::to_vec_pretty(&self.persistent_state) {
-            Ok(data) => data,
-            Err(e) => {
-                log::error!("Failed to serialize persistent state: {}", e);
-                return;
-            }
-        };
+        let data = serde_json::to_vec_pretty(&self.persistent_state)
+            .map_err(WritePersistentStateError::Serialization)?;
 
         // Write to temporary file
-        let mut file = match File::create(&tmp_path) {
-            Ok(file) => file,
-            Err(e) => {
-                log::error!(
-                    "Failed to create temporary file {}: {}",
-                    tmp_path.display(),
-                    e
-                );
-                return;
-            }
-        };
-
-        if let Err(e) = file.write_all(&data) {
-            log::error!(
-                "Failed to write data to temporary file {}: {}",
-                tmp_path.display(),
-                e
-            );
-            return;
-        }
-
-        if let Err(e) = file.flush() {
-            log::error!(
-                "Failed to flush temporary file {}: {}",
-                tmp_path.display(),
-                e
-            );
-            return;
-        };
+        std::fs::write(&tmp_path, data).map_err(WritePersistentStateError::Write)?;
 
         // Rename into place
-        if let Err(e) = std::fs::rename(&tmp_path, &file_path) {
-            log::error!(
-                "Failed to rename temporary file {} to {}: {}",
-                tmp_path.display(),
-                file_path.display(),
-                e
-            );
-            return;
-        };
+        std::fs::rename(&tmp_path, file_path).map_err(WritePersistentStateError::Rename)?;
 
         // Print out infrastructure event
         let infrastructure_event = PersistentStateEvent::from(&self.persistent_state);
         println!("{}", serde_json::to_string(&infrastructure_event).unwrap());
 
         log::debug!(
-            "Successfully wrote persistent state to persistent file {}",
+            "wrote persistent state to state file {}",
             file_path.display()
         );
+
+        Ok(())
     }
 
     pub fn persistent_state(&self) -> &PersistentState {
