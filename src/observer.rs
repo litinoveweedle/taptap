@@ -281,7 +281,7 @@ impl pv::application::Sink for Observer {
             self.persistent_state
                 .gateway_node_tables
                 .insert(gateway_id, new_table);
-            
+
             // Write the updated persistent state to disk
             self.write_persistent_state();
         }
@@ -310,7 +310,8 @@ impl pv::application::Sink for Observer {
             return;
         };
 
-        let Ok(event_payload) = event::PowerReportEvent::new(gateway_id, node_id, slot_clock, power_report)
+        let Ok(event_payload) =
+            event::PowerReportEvent::new(gateway_id, node_id, slot_clock, power_report)
         else {
             log::error!(
                 "discarding power report from gateway {:?} due to invalid slot counter: {:?}",
