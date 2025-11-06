@@ -18,7 +18,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 
-## [0.2.0]
+## [0.2.5] - 2025-11-05
+
+### Added
+
+### Fixed
+- compatibility with the Tigo FW v4.0.1
+
+### Changed
+- compatibility changes to the upstream taptap
+
+### Deprecated
+- persistent-file argument replace by state-file argument
+
+### Removed
+
+
+## [0.2.0] - 2025-10-27
 
 ### Added
 
