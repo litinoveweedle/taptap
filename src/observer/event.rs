@@ -7,7 +7,7 @@ use chrono::{DateTime, Local};
 
 /// An event produced by an observer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type", rename_all = "kebab-case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
     PowerReport(PowerReportEvent),
 }
