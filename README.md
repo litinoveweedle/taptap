@@ -123,6 +123,7 @@ Options:
       --reconnect-timeout <SECONDS>   The time after which connection is re-established if no data is received in seconds (0 for no timeout) [default: 0]
       --reconnect-retry <INT>         The number of times to retry reconnecting before giving up (0 for infinite retries) [default: 0]
       --reconnect-delay <SECONDS>     The delay between reconnect attempts in seconds [default: 5]
+      --state-file <FILE>             Path of the JSON file to provide persistent storage for the infrastructure topology data
   -h, --help            Print help
   -V, --version         Print version
 ```
@@ -157,7 +158,7 @@ gateways":{"4609":{"address":"04:C0:5B:30:ZZ:ZZ:ZZ:ZZ","version":"Mgate Version 
 As such gateway and nodes identification frames are transmitted rarely (in my experience those are not transmitted during PV panels operation during daytime, but rather after sundown when controller probably starts to execute some housekeeping actions), this version now supports storing infrastructure data in the JSON file, which is used as persistent store, ensuring that such data are not lost during restarts. At taptap start the JSON file is read and `taptap::observer::PersistentStateReport` is immediately emitted from the latest stored state. JSON file is updated immediately after any update message is received. To use persistent function you need to provide runtime argument passing JSON file path (example):
 
 ```
-taptap observe --tcp 172.21.3.44 --persistent-file ./taptap.json
+taptap observe --tcp 172.21.3.44 --state-file ./taptap.json
 ```
 
 ## Note
