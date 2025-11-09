@@ -126,6 +126,10 @@ impl Observer {
         if let Err(e) = self.try_write_persistent_state() {
             log::error!("failed to persist state: {}", e);
         }
+
+        // Print out infrastructure event
+        let infrastructure_event = PersistentStateEvent::from(&self.persistent_state);
+        println!("{}", serde_json::to_string(&infrastructure_event).unwrap());
     }
 
     fn try_write_persistent_state(&self) -> Result<(), WritePersistentStateError> {
@@ -145,10 +149,6 @@ impl Observer {
 
         // Rename into place
         std::fs::rename(&tmp_path, file_path).map_err(WritePersistentStateError::Rename)?;
-
-        // Print out infrastructure event
-        let infrastructure_event = PersistentStateEvent::from(&self.persistent_state);
-        println!("{}", serde_json::to_string(&infrastructure_event).unwrap());
 
         log::debug!(
             "wrote persistent state to state file {}",
@@ -281,6 +281,8 @@ impl pv::application::Sink for Observer {
             self.persistent_state
                 .gateway_node_tables
                 .insert(gateway_id, new_table);
+
+            // Write the updated persistent state to disk
             self.write_persistent_state();
         }
     }
@@ -308,7 +310,8 @@ impl pv::application::Sink for Observer {
             return;
         };
 
-        let Ok(event) = event::PowerReportEvent::new(gateway_id, node_id, slot_clock, power_report)
+        let Ok(event_payload) =
+            event::PowerReportEvent::new(gateway_id, node_id, slot_clock, power_report)
         else {
             log::error!(
                 "discarding power report from gateway {:?} due to invalid slot counter: {:?}",
@@ -318,6 +321,8 @@ impl pv::application::Sink for Observer {
             return;
         };
 
+        // Wrap into Event to include the "type" tag in JSON output
+        let event = event::Event::PowerReport(event_payload);
         println!("{}", serde_json::to_string(&event).unwrap());
     }
 }
