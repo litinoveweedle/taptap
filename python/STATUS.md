@@ -117,8 +117,8 @@ python/
   - [x] PV application types (PacketType, U12Pair, PowerReport)
   - [x] 29 tests passing
 
-**Total Tests**: 115/115 passing ✅  
-**Completion**: ~75% (5 of 6 phases)
+**Total Tests**: 124/124 passing ✅  
+**Completion**: ~80% (Phase 6a of 6 complete)
 
 ### Completed ✅
 
@@ -151,20 +151,39 @@ python/
   - [x] CLI interface (click-based)
   - [x] Entry points configured
   - [x] 13 tests passing
+- [x] **Python Phase 6a: Gateway Link Receiver (100%)**
+  - [x] Frame class with type constants
+  - [x] State machine (7 states)
+  - [x] Frame assembly and validation
+  - [x] CRC validation
+  - [x] Payload unescaping
+  - [x] Error counters
+  - [x] 9 tests passing
 
 ### Remaining Work
 
-The Python port is approximately **75% complete** (Phases 1-5 done). Final phase:
+The Python port is approximately **80% complete** (Phase 6a done). Remaining sub-phases:
 
-#### Phase 6: Integration & Validation (Week 6) - FINAL
-- [ ] Gateway link receiver (state machine for frame assembly)
-- [ ] Gateway transport receiver (packet iteration)
-- [ ] Full observer integration (wire up all layers)
-- [ ] Integration tests (end-to-end)
-- [ ] Cross-validation with Rust version
-- [ ] Performance testing
-- [ ] Documentation completion
-- Estimated: 400 lines + 200 lines of tests
+#### Phase 6b: Gateway Transport Receiver - NEXT
+- [ ] Frame type dispatch
+- [ ] ReceivedPackets iteration
+- [ ] DSN deduplication
+- [ ] Transport message handling
+- Estimated: 100 lines + 50 lines of tests
+
+#### Phase 6c: Full Observer Integration
+- [ ] Main Observer class
+- [ ] Wire all layers together
+- [ ] PowerReport → Event pipeline
+- [ ] State persistence integration
+- Estimated: 100 lines + 50 lines of tests
+
+#### Phase 6d: CLI Completion & Integration Tests
+- [ ] Complete observe command implementation
+- [ ] End-to-end integration tests
+- [ ] Cross-validation with Rust
+- [ ] Documentation updates
+- Estimated: 100 lines + 100 lines of tests
 
 #### Phase 2: Gateway Stack (Week 2)
 - [ ] CRC-CCITT calculation
