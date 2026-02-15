@@ -40,7 +40,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "taptap=taptap.cli.main:cli",
+            "taptap=taptap.cli.main:main",
         ],
     },
 )
