@@ -117,8 +117,8 @@ python/
   - [x] PV application types (PacketType, U12Pair, PowerReport)
   - [x] 29 tests passing
 
-**Total Tests**: 124/124 passing ✅  
-**Completion**: ~80% (Phase 6a of 6 complete)
+**Total Tests**: 133/133 passing ✅  
+**Completion**: ~85% (Phase 6b of 6 complete)
 
 ### Completed ✅
 
@@ -159,22 +159,22 @@ python/
   - [x] Payload unescaping
   - [x] Error counters
   - [x] 9 tests passing
+- [x] **Python Phase 6b: Gateway Transport Receiver (100%)**
+  - [x] ReceivedPackets iterator
+  - [x] Transport message types (ReceiveRequest, ReceiveResponse)
+  - [x] Packet number expansion algorithm
+  - [x] Transport receiver with frame dispatch
+  - [x] Sink interface with callbacks
+  - [x] 9 tests passing
 
 ### Remaining Work
 
-The Python port is approximately **80% complete** (Phase 6a done). Remaining sub-phases:
+The Python port is approximately **85% complete** (Phase 6b done). Remaining sub-phases:
 
-#### Phase 6b: Gateway Transport Receiver - NEXT
-- [ ] Frame type dispatch
-- [ ] ReceivedPackets iteration
-- [ ] DSN deduplication
-- [ ] Transport message handling
-- Estimated: 100 lines + 50 lines of tests
-
-#### Phase 6c: Full Observer Integration
+#### Phase 6c: Full Observer Integration - NEXT
 - [ ] Main Observer class
-- [ ] Wire all layers together
-- [ ] PowerReport → Event pipeline
+- [ ] Wire transport → observer
+- [ ] PowerReport → PowerReportEvent pipeline
 - [ ] State persistence integration
 - Estimated: 100 lines + 50 lines of tests
 
@@ -183,7 +183,7 @@ The Python port is approximately **80% complete** (Phase 6a done). Remaining sub
 - [ ] End-to-end integration tests
 - [ ] Cross-validation with Rust
 - [ ] Documentation updates
-- Estimated: 100 lines + 100 lines of tests
+- Estimated: 50 lines + 100 lines of tests
 
 #### Phase 2: Gateway Stack (Week 2)
 - [ ] CRC-CCITT calculation
