@@ -117,8 +117,8 @@ python/
   - [x] PV application types (PacketType, U12Pair, PowerReport)
   - [x] 29 tests passing
 
-**Total Tests**: 133/133 passing ✅  
-**Completion**: ~85% (Phase 6b of 6 complete)
+**Total Tests**: 138/138 passing ✅  
+**Completion**: ~90% (Phase 6c of 6 complete)
 
 ### Completed ✅
 
@@ -166,6 +166,14 @@ python/
   - [x] Transport receiver with frame dispatch
   - [x] Sink interface with callbacks
   - [x] 9 tests passing
+- [x] **Python Phase 6c: Observer Integration (100%)**
+  - [x] PV application receiver (packet type dispatch)
+  - [x] Main Observer class (dual sink implementation)
+  - [x] PowerReport → PowerReportEvent pipeline
+  - [x] SlotClock integration
+  - [x] JSON event output
+  - [x] State persistence
+  - [x] 5 tests passing
 
 ### Remaining Work
 
