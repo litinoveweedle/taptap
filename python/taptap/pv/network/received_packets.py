@@ -1,7 +1,6 @@
 """PV network received packets iterator."""
 
 from typing import Iterator, Tuple, Optional
-from ..application.types import PacketType
 
 
 class PacketTooShortError(Exception):

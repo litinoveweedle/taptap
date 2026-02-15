@@ -59,25 +59,41 @@ def test_power_report_event_to_json():
 
 def test_power_report_event_from_power_report():
     """Test creating event from power report data."""
+    from taptap.pv.application import PowerReport
+    from taptap.observer.slot_clock import SlotClock
+    from taptap.pv.link import SlotCounter
+    
     gateway_id = GatewayID(4609)
     node_id = NodeID(116)
+    
+    # Create a slot clock
+    slot_counter = SlotCounter.from_u16(0x1234)
     now = datetime.now()
-    rssi = RSSI(132)
+    slot_clock = SlotClock(slot_counter, now)
+    
+    # Create a power report
+    power_data = bytes([
+        0x12, 0x34,  # slot_counter
+        0x0A, 0xBC,  # voltage_in
+        0xC1, 0x23,  # voltages
+        0x45,  # voltage_out
+        0x67, 0x89,  # current
+        0xAB,  # dc_dc_duty_cycle
+        0xCD, 0xEF,  # temperature
+        0x84,  # rssi (132)
+    ])
+    power_report = PowerReport.from_bytes(power_data)
     
     event = PowerReportEvent.from_power_report(
         gateway_id=gateway_id,
         node_id=node_id,
-        timestamp=now,
-        voltage_in=30.5,
-        voltage_out=30.0,
-        current=2.5,
-        duty_cycle=1.0,
-        temperature=25.5,
-        rssi=rssi
+        slot_clock=slot_clock,
+        power_report=power_report
     )
     
     assert event.gateway == 4609
     assert event.node == 116
+    assert event.rssi == 132
     assert event.rssi == 132
 
 

@@ -47,6 +47,24 @@ class NodeID:
         value = struct.unpack('>H', data)[0]
         return cls(value)
     
+    @classmethod
+    def from_node_address(cls, node_address: 'NodeAddress') -> 'NodeID':
+        """Create NodeID from NodeAddress.
+        
+        Args:
+            node_address: NodeAddress to convert
+            
+        Returns:
+            NodeID
+            
+        Raises:
+            ValueError: If node_address is zero (broadcast)
+        """
+        value = node_address.value
+        if value == 0:
+            raise ValueError("Cannot convert broadcast NodeAddress to NodeID")
+        return cls(value)
+    
     def __eq__(self, other) -> bool:
         if not isinstance(other, NodeID):
             return NotImplemented

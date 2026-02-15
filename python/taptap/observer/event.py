@@ -52,15 +52,33 @@ class PowerReportEvent:
         cls,
         gateway_id: GatewayID,
         node_id: NodeID,
-        timestamp: datetime,
-        voltage_in: float,
-        voltage_out: float,
-        current: float,
-        duty_cycle: float,
-        temperature: float,
-        rssi: RSSI,
+        slot_clock: 'SlotClock',
+        power_report: 'PowerReport',
     ) -> 'PowerReportEvent':
-        """Create event from power report data."""
+        """Create event from PowerReport using SlotClock for timestamp.
+        
+        Args:
+            gateway_id: Gateway that received the report
+            node_id: PV node that sent the report
+            slot_clock: SlotClock for timestamp conversion
+            power_report: Parsed PowerReport
+            
+        Returns:
+            PowerReportEvent
+            
+        Raises:
+            Exception: If slot counter cannot be converted to datetime
+        """
+        # Get timestamp from slot counter
+        timestamp = slot_clock.get(power_report.slot_counter)
+        
+        # Extract scaled measurements
+        voltage_in = power_report.voltage_in
+        voltage_out = power_report.voltage_out
+        current = power_report.current
+        duty_cycle = power_report.duty_cycle
+        temperature = power_report.temperature
+        
         return cls(
             gateway=gateway_id.value,
             node=node_id.value,
@@ -70,7 +88,7 @@ class PowerReportEvent:
             current=current,
             dc_dc_duty_cycle=duty_cycle,
             temperature=temperature,
-            rssi=rssi.value,
+            rssi=power_report.rssi.value,
         )
 
 
@@ -113,3 +131,48 @@ class Node:
         if self.barcode:
             result['barcode'] = self.barcode
         return result
+
+
+class Event:
+    """Event wrapper with type tag for JSON output."""
+    
+    def __init__(self, event_type: str, payload: PowerReportEvent):
+        """Create event with type and payload.
+        
+        Args:
+            event_type: Type string for JSON output
+            payload: Event payload
+        """
+        self._type = event_type
+        self._payload = payload
+    
+    @classmethod
+    def power_report(cls, payload: PowerReportEvent) -> 'Event':
+        """Create power report event.
+        
+        Args:
+            payload: PowerReportEvent payload
+            
+        Returns:
+            Event wrapper
+        """
+        return cls('power_report', payload)
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization.
+        
+        Returns:
+            Dict with 'type' key and payload fields
+        """
+        result = {'type': self._type}
+        result['gateway'] = self._payload.gateway
+        result['node'] = self._payload.node
+        result['timestamp'] = self._payload.timestamp.isoformat()
+        result['voltage_in'] = self._payload.voltage_in
+        result['voltage_out'] = self._payload.voltage_out
+        result['current'] = self._payload.current
+        result['dc_dc_duty_cycle'] = self._payload.dc_dc_duty_cycle
+        result['temperature'] = self._payload.temperature
+        result['rssi'] = self._payload.rssi
+        return result
+
