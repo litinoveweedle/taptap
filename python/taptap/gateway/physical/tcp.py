@@ -72,7 +72,7 @@ class TcpSource:
                 if self._socket:
                     try:
                         self._socket.close()
-                    except:
+                    except Exception:
                         pass
                 
                 time.sleep(self._reconnect_delay)
@@ -120,7 +120,7 @@ class TcpSource:
         if self._socket:
             try:
                 self._socket.close()
-            except:
+            except Exception:
                 pass
             self._socket = None
     

@@ -21,6 +21,8 @@ def test_tcp_source_context_manager():
     from taptap.gateway.physical.tcp import TcpSource
     
     # Create a simple echo server for testing
+    port_holder = {}
+    
     def echo_server():
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -29,8 +31,7 @@ def test_tcp_source_context_manager():
         server.listen(1)
         
         # Signal port is ready
-        global test_port
-        test_port = port
+        port_holder['port'] = port
         
         # Accept one connection
         try:
@@ -45,22 +46,20 @@ def test_tcp_source_context_manager():
             server.close()
     
     # Start server in thread
-    global test_port
-    test_port = None
     server_thread = threading.Thread(target=echo_server, daemon=True)
     server_thread.start()
     
     # Wait for server to start
     for _ in range(10):
-        if test_port is not None:
+        if 'port' in port_holder:
             break
         time.sleep(0.1)
     
-    if test_port is None:
+    if 'port' not in port_holder:
         pytest.skip("Test server failed to start")
     
     # Test context manager
-    with TcpSource('localhost', test_port, reconnect_retry=1) as source:
+    with TcpSource('localhost', port_holder['port'], reconnect_retry=1) as source:
         data = source.read()
         assert data == b'Hello'
 
