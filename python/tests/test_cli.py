@@ -82,3 +82,64 @@ def test_peek_bytes_help():
     
     assert result.exit_code == 0
     assert '--raw' in result.output
+
+
+def test_peek_frames_help():
+    """Test peek-frames command help."""
+    from taptap.cli.main import cli
+    
+    runner = CliRunner()
+    result = runner.invoke(cli, ['peek-frames', '--help'])
+    
+    assert result.exit_code == 0
+    assert '--serial' in result.output
+    assert '--tcp' in result.output
+
+
+def test_peek_frames_requires_source():
+    """Test that peek-frames requires --serial or --tcp."""
+    from taptap.cli.main import cli
+    
+    runner = CliRunner()
+    result = runner.invoke(cli, ['peek-frames'])
+    
+    assert result.exit_code != 0
+    assert 'Must specify either --serial or --tcp' in result.output
+
+
+def test_peek_activity_help():
+    """Test peek-activity command help."""
+    from taptap.cli.main import cli
+    
+    runner = CliRunner()
+    result = runner.invoke(cli, ['peek-activity', '--help'])
+    
+    assert result.exit_code == 0
+    assert '--serial' in result.output
+    assert '--tcp' in result.output
+
+
+def test_peek_activity_requires_source():
+    """Test that peek-activity requires --serial or --tcp."""
+    from taptap.cli.main import cli
+    
+    runner = CliRunner()
+    result = runner.invoke(cli, ['peek-activity'])
+    
+    assert result.exit_code != 0
+    assert 'Must specify either --serial or --tcp' in result.output
+
+
+def test_cli_lists_all_commands():
+    """Test that CLI help lists all five commands."""
+    from taptap.cli.main import cli
+    
+    runner = CliRunner()
+    result = runner.invoke(cli, ['--help'])
+    
+    assert result.exit_code == 0
+    assert 'observe' in result.output
+    assert 'peek-bytes' in result.output
+    assert 'peek-frames' in result.output
+    assert 'peek-activity' in result.output
+    assert 'list-serial-ports' in result.output

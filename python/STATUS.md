@@ -10,32 +10,32 @@
 
 ## Quick Summary
 
-| Metric | Value |
-|--------|-------|
-| **Phases Complete** | 6/6 (100%) |
-| **Tests** | 141/141 passing (100%) |
-| **Implementation** | 3,100+ lines |
-| **Test Code** | 1,600+ lines |
-| **Documentation** | 120+ KB |
-| **Security** | 0 vulnerabilities |
-| **Code Review** | 0 issues |
+| Metric              | Value                  |
+| ------------------- | ---------------------- |
+| **Phases Complete** | 6/6 (100%)             |
+| **Tests**           | 146/146 passing (100%) |
+| **Implementation**  | 3,100+ lines           |
+| **Test Code**       | 1,600+ lines           |
+| **Documentation**   | 120+ KB                |
+| **Security**        | 0 vulnerabilities      |
+| **Code Review**     | 0 issues               |
 
 ---
 
 ## Phase Completion
 
-| Phase | Status | Tests | Lines | Description |
-|-------|--------|-------|-------|-------------|
-| **1** | ✅ | 31 | 430 | Core data structures |
-| **2** | ✅ | 16 | 270 | Gateway stack (CRC, escaping) |
-| **3** | ✅ | 29 | 700 | PV stack (network & app types) |
-| **4** | ✅ | 26 | 470 | Observer & state management |
-| **5** | ✅ | 13 | 405 | Physical layer & CLI |
-| **6a** | ✅ | 9 | 270 | Gateway link receiver |
-| **6b** | ✅ | 9 | 450 | Gateway transport receiver |
-| **6c** | ✅ | 5 | 410 | Observer integration |
-| **6d** | ✅ | 3 | 50 | Final CLI integration & E2E |
-| **Total** | ✅ | **141** | **3,455** | **Complete** |
+| Phase     | Status | Tests   | Lines     | Description                    |
+| --------- | ------ | ------- | --------- | ------------------------------ |
+| **1**     | ✅     | 31      | 430       | Core data structures           |
+| **2**     | ✅     | 16      | 270       | Gateway stack (CRC, escaping)  |
+| **3**     | ✅     | 29      | 700       | PV stack (network & app types) |
+| **4**     | ✅     | 26      | 470       | Observer & state management    |
+| **5**     | ✅     | 13      | 405       | Physical layer & CLI           |
+| **6a**    | ✅     | 9       | 270       | Gateway link receiver          |
+| **6b**    | ✅     | 9       | 450       | Gateway transport receiver     |
+| **6c**    | ✅     | 5       | 410       | Observer integration           |
+| **6d**    | ✅     | 3       | 50        | Final CLI integration & E2E    |
+| **Total** | ✅     | **141** | **3,455** | **Complete**                   |
 
 ---
 
@@ -63,6 +63,8 @@ JSON Events
 - `taptap observe --serial PORT` - Monitor via RS-485
 - `taptap list-serial-ports` - List available ports
 - `taptap peek-bytes` - Raw data inspection
+- `taptap peek-frames` - Link-layer frame inspection
+- `taptap peek-activity` - Transport + application layer activity
 - `taptap --help` - Full help system
 
 ### ✅ Key Features
