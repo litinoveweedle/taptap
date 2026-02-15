@@ -177,21 +177,18 @@ python/
 
 ### Remaining Work
 
-The Python port is approximately **85% complete** (Phase 6b done). Remaining sub-phases:
+The Python port is approximately **90% complete** (Phase 6c done). Remaining sub-phase:
 
-#### Phase 6c: Full Observer Integration - NEXT
-- [ ] Main Observer class
-- [ ] Wire transport → observer
-- [ ] PowerReport → PowerReportEvent pipeline
-- [ ] State persistence integration
-- Estimated: 100 lines + 50 lines of tests
-
-#### Phase 6d: CLI Completion & Integration Tests
-- [ ] Complete observe command implementation
+#### Phase 6d: CLI Completion & Final Integration - NEXT
+- [ ] Wire all components in CLI observe command
+  - Create physical source → link receiver → transport receiver → PV app receiver → observer
+  - Signal handling (Ctrl+C for graceful shutdown)
 - [ ] End-to-end integration tests
-- [ ] Cross-validation with Rust
-- [ ] Documentation updates
-- Estimated: 50 lines + 100 lines of tests
+- [ ] Cross-validation with Rust implementation
+- [ ] Documentation updates (README, usage examples)
+- Estimated: 50 lines + 20 lines of tests
+
+Once Phase 6d is complete, the Python port will be **100% functional** with all features of the Rust implementation.
 
 #### Phase 2: Gateway Stack (Week 2)
 - [ ] CRC-CCITT calculation
