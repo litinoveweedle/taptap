@@ -117,8 +117,8 @@ python/
   - [x] PV application types (PacketType, U12Pair, PowerReport)
   - [x] 29 tests passing
 
-**Total Tests**: 102/102 passing ✅  
-**Completion**: ~60% (4 of 6 phases)
+**Total Tests**: 115/115 passing ✅  
+**Completion**: ~75% (5 of 6 phases)
 
 ### Completed ✅
 
@@ -145,25 +145,26 @@ python/
   - [x] Persistent state (JSON serialization)
   - [x] Node table (NodeID → LongAddress)
   - [x] 26 tests passing
+- [x] **Python Phase 5: Physical Layer & CLI (100%)**
+  - [x] TCP source with auto-reconnect
+  - [x] Serial source (pyserial wrapper)
+  - [x] CLI interface (click-based)
+  - [x] Entry points configured
+  - [x] 13 tests passing
 
 ### Remaining Work
 
-The Python port is approximately **60% complete** (Phases 1-4 done). Remaining phases:
+The Python port is approximately **75% complete** (Phases 1-5 done). Final phase:
 
-#### Phase 5: Physical Layer & CLI (Week 5) - NEXT
-- [ ] Serial port source (pyserial)
-- [ ] TCP source (socket)
-- [ ] CLI interface (click)
-- [ ] Main entry point
-- Estimated: 300 lines + 100 lines of tests
-
-#### Phase 6: Integration & Validation (Week 6)
-- [ ] Gateway link receiver (state machine)
-- [ ] Gateway transport receiver
-- [ ] Integration tests
+#### Phase 6: Integration & Validation (Week 6) - FINAL
+- [ ] Gateway link receiver (state machine for frame assembly)
+- [ ] Gateway transport receiver (packet iteration)
+- [ ] Full observer integration (wire up all layers)
+- [ ] Integration tests (end-to-end)
 - [ ] Cross-validation with Rust version
 - [ ] Performance testing
 - [ ] Documentation completion
+- Estimated: 400 lines + 200 lines of tests
 
 #### Phase 2: Gateway Stack (Week 2)
 - [ ] CRC-CCITT calculation
