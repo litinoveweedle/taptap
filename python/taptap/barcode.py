@@ -9,9 +9,6 @@ Format: X-NNNNNNNC where:
 
 from typing import Optional
 
-# CRC lookup table
-_CRC_TABLE = [0, 3, 6, 5, 12, 15, 10, 9, 11, 8, 13, 14, 7, 4, 1, 2]
-
 # Base-32 alphabet (no vowels to avoid words)
 _ALPHABET = 'GHJKLMNPRSTVWXYZ'
 

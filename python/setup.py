@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="taptap",
-    version="0.2.6-py",
+    version="0.2.6.post1",
     author="Will Glynn, LiTinOveWeedle, Python port by GitHub Copilot",
     description="Python implementation of the Tigo TAP protocol",
     long_description=long_description,

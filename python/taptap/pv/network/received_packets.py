@@ -11,8 +11,12 @@ class PacketTooShortError(Exception):
 class ReceivedPackets:
     """Iterator over zero or more received packets in a byte buffer.
     
-    Each packet consists of a 6-byte header followed by data.
+    Each packet consists of a 7-byte header followed by data.
+    The header contains packet_type(1), node_address(2), short_address(2),
+    dsn(1), and data_length(1).
     """
+    
+    HEADER_SIZE = 7
     
     def __init__(self, data: bytes):
         """Create iterator over packet data.
@@ -27,7 +31,7 @@ class ReceivedPackets:
         """Iterate over (header_bytes, data_bytes) tuples.
         
         Yields:
-            Tuple of (6-byte header, data bytes)
+            Tuple of (7-byte header, data bytes)
             
         Raises:
             PacketTooShortError: If remaining data is too short for header
@@ -35,29 +39,29 @@ class ReceivedPackets:
         while self._offset < len(self._data):
             remaining = self._data[self._offset:]
             
-            # Need at least 6 bytes for header
-            if len(remaining) < 6:
+            # Need at least 7 bytes for header
+            if len(remaining) < self.HEADER_SIZE:
                 raise PacketTooShortError(
-                    f"Not enough bytes for header: {len(remaining)} < 6"
+                    f"Not enough bytes for header: {len(remaining)} < {self.HEADER_SIZE}"
                 )
             
             # Extract header
-            header_bytes = remaining[0:6]
+            header_bytes = remaining[0:self.HEADER_SIZE]
             
-            # Data length is the 6th byte (index 5)
-            data_length = header_bytes[5]
+            # Data length is the 7th byte (index 6)
+            data_length = header_bytes[6]
             
             # Check we have enough data
-            if len(remaining) < 6 + data_length:
+            if len(remaining) < self.HEADER_SIZE + data_length:
                 raise PacketTooShortError(
-                    f"Not enough bytes for packet: {len(remaining)} < {6 + data_length}"
+                    f"Not enough bytes for packet: {len(remaining)} < {self.HEADER_SIZE + data_length}"
                 )
             
             # Extract data
-            data_bytes = remaining[6:6 + data_length]
+            data_bytes = remaining[self.HEADER_SIZE:self.HEADER_SIZE + data_length]
             
             # Advance offset
-            self._offset += 6 + data_length
+            self._offset += self.HEADER_SIZE + data_length
             
             yield (header_bytes, data_bytes)
     

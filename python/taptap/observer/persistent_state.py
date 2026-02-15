@@ -78,14 +78,13 @@ class PersistentState:
             print(f"Warning: Failed to load persistent state from {path}: {e}")
             return cls()
     
-    def save(self, path: Path) -> None:
-        """Save persistent state to JSON file (atomic).
+    def to_dict(self) -> dict:
+        """Serialize persistent state to a dictionary.
         
-        Args:
-            path: Path to JSON file
+        Returns:
+            Dictionary suitable for JSON serialization
         """
-        # Serialize to dict
-        data = {
+        return {
             'gateway_identities': {
                 str(gw_id): ':'.join(f'{b:02X}' for b in addr.address)
                 for gw_id, addr in self.gateway_identities.items()
@@ -102,6 +101,54 @@ class PersistentState:
                 for gw_id, table in self.gateway_node_tables.items()
             }
         }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> 'PersistentState':
+        """Deserialize persistent state from a dictionary.
+        
+        Args:
+            data: Dictionary from JSON deserialization
+            
+        Returns:
+            PersistentState instance
+        """
+        # Deserialize gateway identities
+        gateway_identities = {}
+        for gw_id_str, addr_str in data.get('gateway_identities', {}).items():
+            gw_id = int(gw_id_str)
+            addr_bytes = bytes.fromhex(addr_str.replace(':', ''))
+            gateway_identities[gw_id] = LongAddress(addr_bytes)
+        
+        # Deserialize gateway versions
+        gateway_versions = {
+            int(gw_id): version
+            for gw_id, version in data.get('gateway_versions', {}).items()
+        }
+        
+        # Deserialize node tables
+        gateway_node_tables = {}
+        for gw_id_str, nodes in data.get('gateway_node_tables', {}).items():
+            gw_id = int(gw_id_str)
+            table = NodeTable()
+            for node_id_str, addr_str in nodes.items():
+                node_id = NodeID(int(node_id_str))
+                addr_bytes = bytes.fromhex(addr_str.replace(':', ''))
+                table.set(node_id, LongAddress(addr_bytes))
+            gateway_node_tables[gw_id] = table
+        
+        return cls(
+            gateway_identities=gateway_identities,
+            gateway_versions=gateway_versions,
+            gateway_node_tables=gateway_node_tables
+        )
+    
+    def save(self, path: Path) -> None:
+        """Save persistent state to JSON file (atomic).
+        
+        Args:
+            path: Path to JSON file
+        """
+        data = self.to_dict()
         
         # Atomic write: write to temp file then rename
         temp_path = path.with_suffix('.tmp')

@@ -337,7 +337,10 @@ class RSSI:
 
 @dataclass(frozen=True)
 class ReceivedPacketHeader:
-    """Header for PV network received packet (5 bytes)."""
+    """Header for PV network received packet (7 bytes).
+    
+    Wire format: packet_type(1) + node_address(2) + short_address(2) + dsn(1) + data_length(1)
+    """
     
     packet_type: int  # u8
     node_address: NodeAddress  # u16 BE
@@ -347,22 +350,22 @@ class ReceivedPacketHeader:
     
     @classmethod
     def from_bytes(cls, data: bytes) -> 'ReceivedPacketHeader':
-        """Parse header from bytes.
+        """Parse header from 7 bytes.
         
         Args:
-            data: At least 6 bytes (5-byte header + length indicator)
+            data: At least 7 bytes
             
         Returns:
             ReceivedPacketHeader instance
         """
-        if len(data) < 6:
-            raise ValueError(f"ReceivedPacketHeader requires at least 6 bytes, got {len(data)}")
+        if len(data) < 7:
+            raise ValueError(f"ReceivedPacketHeader requires at least 7 bytes, got {len(data)}")
         
         packet_type = data[0]
         node_address = NodeAddress.from_bytes(data[1:3])
         short_address = ShortAddress.from_bytes(data[3:5])
         dsn = DSN(data[5])
-        data_length = data[6] if len(data) > 6 else 0
+        data_length = data[6]
         
         return cls(
             packet_type=packet_type,
@@ -373,7 +376,7 @@ class ReceivedPacketHeader:
         )
     
     def to_bytes(self) -> bytes:
-        """Encode header to bytes."""
+        """Encode header to 7 bytes."""
         return bytes([
             self.packet_type,
             *self.node_address.to_bytes(),

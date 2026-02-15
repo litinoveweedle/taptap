@@ -24,7 +24,7 @@ def test_cli_version():
     result = runner.invoke(cli, ['--version'])
     
     assert result.exit_code == 0
-    assert '0.2.6-py' in result.output
+    assert '0.2.6.post1' in result.output
 
 
 def test_observe_requires_source():

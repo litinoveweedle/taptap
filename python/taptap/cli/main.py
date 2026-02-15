@@ -12,7 +12,7 @@ import click
 
 
 @click.group()
-@click.version_option(version='0.2.6-py')
+@click.version_option(version='0.2.6.post1')
 def cli():
     """TapTap: Tigo TAP protocol observer (Python implementation)
     
@@ -121,8 +121,6 @@ def observe(serial_port, tcp_host, tcp_port, reconnect_timeout,
     from ..gateway.transport.receiver import Receiver as TransportReceiver
     from ..pv.application.receiver import Receiver as ApplicationReceiver
     from ..observer.observer import Observer
-    import signal
-    import json
     
     # Create the full protocol stack
     observer = Observer(state_file=state_file)
