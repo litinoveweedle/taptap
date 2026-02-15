@@ -86,6 +86,11 @@ class Address:
         """Check if this is a From address."""
         return self._from
     
+    @property
+    def direction(self) -> int:
+        """Get direction as integer (0=To, 1=From)."""
+        return 1 if self._from else 0
+    
     def __eq__(self, other) -> bool:
         if not isinstance(other, Address):
             return NotImplemented
