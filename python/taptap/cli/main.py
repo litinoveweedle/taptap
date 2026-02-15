@@ -5,6 +5,8 @@ This module provides the main entry point for the TapTap Python implementation.
 """
 
 import sys
+import signal
+import json
 from pathlib import Path
 import click
 
@@ -114,22 +116,56 @@ def observe(serial_port, tcp_host, tcp_port, reconnect_timeout,
             click.echo(f"Error connecting to TCP: {e}", err=True)
             sys.exit(1)
     
-    # Note: Full observer integration will be implemented in Phase 6
-    # For now, just demonstrate connection works
-    click.echo("Observer mode - reading data...", err=True)
-    click.echo("Note: Full observer integration pending Phase 6", err=True)
+    # Import observer components
+    from ..gateway.link.receiver import Receiver as LinkReceiver
+    from ..gateway.transport.receiver import Receiver as TransportReceiver
+    from ..pv.application.receiver import Receiver as ApplicationReceiver
+    from ..observer.observer import Observer
+    import signal
+    import json
+    
+    # Create the full protocol stack
+    observer = Observer(state_file=state_file)
+    app_receiver = ApplicationReceiver(sink=observer)
+    transport_receiver = TransportReceiver(sink=app_receiver)
+    link_receiver = LinkReceiver(sink=transport_receiver)
+    
+    # Setup signal handling for graceful shutdown
+    shutdown_requested = [False]  # Use list to allow modification in nested function
+    
+    def signal_handler(signum, frame):
+        shutdown_requested[0] = True
+        click.echo("\nShutdown requested...", err=True)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    click.echo("Observer mode - monitoring TAP protocol...", err=True)
+    if state_file:
+        click.echo(f"State file: {state_file}", err=True)
     
     try:
-        # Simple read loop for demonstration
-        count = 0
-        while count < 10:  # Read 10 chunks for demo
+        # Main read loop
+        while not shutdown_requested[0]:
             data = source.read()
             if data:
-                click.echo(f"Read {len(data)} bytes", err=True)
-                count += 1
+                # Feed bytes into the link receiver
+                link_receiver.extend_from_slice(data)
     except KeyboardInterrupt:
         click.echo("\nInterrupted by user", err=True)
+    except Exception as e:
+        click.echo(f"\nError: {e}", err=True)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
     finally:
+        # Save state on exit
+        if state_file:
+            try:
+                observer.write_persistent_state()
+                click.echo(f"State saved to {state_file}", err=True)
+            except Exception as e:
+                click.echo(f"Warning: Failed to save state: {e}", err=True)
+        
         source.close()
         click.echo("Connection closed", err=True)
 
