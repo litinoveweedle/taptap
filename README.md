@@ -1,5 +1,7 @@
 # `taptap`
 
+> **This fork extends the [original taptap](https://github.com/willglynn/taptap) to include Python ports of the protocol parser, making it accessible to users who prefer Python over Rust.**
+
 This project implements the [Tigo TAP](https://www.tigoenergy.com/product/tigo-access-point) protocol, especially for
 the purpose of monitoring a Tigo TAP and the associated solar array using the TAP's communication cable. This allows
 100% local offline data collection.
@@ -163,3 +165,49 @@ taptap observe --tcp 172.21.3.44 --state-file ./taptap.json
 
 ## Note
 **This version doesn't support and probably never will any messages parsing, corelation or direct database sink to store emitted messages. I like 'KISS' (Keep It Stupid, Simple) principles and I strongly prefer to have simple atomic tool to output Tigo CCA messages and than use more suitable programs for messages parsing, corelation and storing in some backend storage. Take a look into Logstash, FluentD, of if you looking for MQTT bridge you can checkout my [taptap-mqqt project](https://github.com/litinoveweedle/taptap-mqtt/)**
+
+## Python Ports
+
+This fork includes two Python implementations of the TapTap protocol, offering the same core functionality without requiring a Rust toolchain.
+
+### pytap (Simplified)
+
+A streamlined Python parser located in [`pytap/`](pytap/). Focused on ease of use with minimal dependencies.
+
+```bash
+cd pytap
+pip install -e ".[cli]"
+pytap observe --tcp 192.168.1.100 --port 502
+```
+
+**Features:**
+- Core protocol parsing (frame accumulation, CRC validation, escape handling)
+- Power report, infrastructure, topology, and diagnostic string events
+- CLI with `observe`, `peek-bytes`, and `list-serial-ports` commands
+- TCP and serial sources with auto-reconnect
+- Persistent state file for infrastructure topology
+- Barcode encode/decode utilities
+- Python 3.10+, no required dependencies for library use
+
+See [pytap/README.md](pytap/README.md) for full documentation.
+
+### taptap-python (Full Port)
+
+A comprehensive Python port located in [`python/`](python/). Mirrors the Rust implementation's architecture more closely, including the full gateway stack and PV network layers.
+
+```bash
+cd python
+pip install -e ".[cli]"
+taptap observe --tcp 192.168.1.100
+```
+
+**Features:**
+- Full gateway stack (physical, link, transport layers)
+- PV network and application layer types
+- SlotClock time synchronization
+- Observer with node table and persistent state
+- TCP and serial sources with reconnection
+- CLI interface (click)
+- 115+ tests
+
+See [python/README.md](python/README.md) for full documentation and development status.

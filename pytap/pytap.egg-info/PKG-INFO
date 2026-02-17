@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: pytap
+Version: 0.1.0
+Summary: Simplified TapTap protocol parser for Tigo TAP solar monitoring
+Requires-Python: >=3.10
+Provides-Extra: serial
+Requires-Dist: pyserial>=3.5; extra == "serial"
+Provides-Extra: cli
+Requires-Dist: click>=8.0; extra == "cli"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Dynamic: provides-extra
+Dynamic: requires-python
+Dynamic: summary

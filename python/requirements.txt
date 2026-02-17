@@ -1,0 +1,12 @@
+# TapTap Python - Core dependencies
+pyserial>=3.5
+jsonschema>=4.0
+
+# CLI
+click>=8.0
+
+# Development dependencies (optional)
+pytest>=7.0
+pytest-cov>=4.0
+black>=23.0
+mypy>=1.0
