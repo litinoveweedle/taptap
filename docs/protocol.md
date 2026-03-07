@@ -56,6 +56,8 @@ The information here is based on the author's observations from a 2024 solar ins
 Tigo TAP, and 135x Tigo [TS4-A-O](https://www.tigoenergy.com/product/ts4-a-o) DC optimizers. The author developed this
 document and the [`taptap` software](https://github.com/willglynn/taptap) for the purpose of interoperability with this
 system, and the author is sharing this work so that others may interoperate with their own systems in a similar way.
+Additional observations have been made from a 2026 multi-TAP installation with 3 TAPs (one running G-firmware, two
+running H-firmware) and 26x optimizers, which revealed firmware-dependent protocol variations documented below.
 This information is certainly both incorrect and incomplete, especially with respect to other devices in the product
 family, to installations involving multiple TAPs, and to the older "star" systems circa 2018 rather than the newer
 "mesh" systems.
@@ -342,6 +344,23 @@ Status type: 00 E0  (G-firmware)  /  01 00  (H-firmware equivalent)
 
 The slot counter seems to be known by remote devices at the [PV link layer](#pv-link-layer), so the slot counter is
 documented there.
+
+#### First byte (super-epoch counter)
+
+The first byte of the receive response status word encodes a 2-bit counter synchronized to the slot counter's
+epoch cycle. Bits 7:6 increment each time the slot counter completes a full 4-epoch cycle (~240 seconds, when
+epoch transitions from 3 to 0). The low 6 bits are always `0x01`. This behaviour is identical across G-firmware and
+H-firmware TAPs.
+
+| byte[0] | Binary       | Super-epoch | Transitions at slot epoch 3→0 |
+|---------|-------------|-------------|-------------------------------|
+| `0x01`  | `00_000001` | 0           | Start of cycle                |
+| `0x41`  | `01_000001` | 1           | After ~240s                   |
+| `0x81`  | `10_000001` | 2           | After ~480s                   |
+| `0xC1`  | `11_000001` | 3           | After ~720s                   |
+
+The full cycle wraps every ~960 seconds (~16 minutes). All TAPs on the same bus transition simultaneously
+(within ~2 seconds, corresponding to their slot counter skew).
 
 Each received packet is preceded by a packet header. The author belives this conceptually belongs to the [PV network
 layer](#pv-network-layer) and documented it there.
@@ -804,6 +823,43 @@ The gateway responds to an enumeration end request with an enumeration end respo
        Type:                 00 06
 ```
 
+In multi-TAP systems, all TAPs also send a second response (gateway frame type `0E 03`) with a 13-byte payload
+immediately after the enumeration end exchange. The payload is identical across all TAPs:
+
+```text
+              FF 7E 07 92 01 0E 03 00 00 00 00 00 00 00 00 00 00 00 01 03 … 7E 08
+    Address:           92 01
+       Type:                 0E 03
+    Payload:                       00 00 00 00 00 00 00 00 00 00 00 01 03
+```
+
+This may be a "ready" or "reset complete" confirmation from the gateway.
+
+### Channel query (H-firmware only)
+
+After enumeration, the controller queries H-firmware gateways for their radio channel using gateway frame type `00 0E`.
+G-firmware gateways do not receive this request.
+
+```text
+              00 FF FF 7E 07 12 02 00 0E … 7E 08
+    Address:                 12 02
+       Type:                       00 0E
+    Payload:                             (empty)
+```
+
+The gateway responds with frame type `00 0F` containing 2 bytes:
+
+```text
+              FF 7E 07 92 02 00 0F 20 16 … 7E 08
+    Address:           92 02
+       Type:                 00 0F
+    Payload:                       20 16
+        ???:                       20
+    Channel:                          16     0x16 = channel 22
+```
+
+Observed responses: TAP2 (H-firmware, channel 22) returned `20 16`, TAP3 (H-firmware, channel 14) returned `20 0E`.
+
 ## PV physical layer
 
 The PV network uses [IEEE 802.15.4](https://en.wikipedia.org/wiki/IEEE_802.15.4) to exchange data between the gateways
@@ -982,6 +1038,8 @@ flaws.
 | `0D` [Gateway radio configuration request](#gateway-radio-configuration)  | 36   | 0               | 0                 |
 | `0E` [Gateway radio configuration response](#gateway-radio-configuration) | 0    | 36              | 0                 |
 | `13` [PV configuration request](#pv-configuration)                        | 134  | 0               | 0                 |
+| `14` [PV configuration ack](#pv-configuration) (H-firmware)               | 0    | 0               | 0                 |
+| `17` [PV configuration query](#pv-configuration-query)                    | —    | 0               | 0                 |
 | `18` [PV configuration response](#pv-configuration)                       | 0    | 0               | 129               |
 | `22` [Broadcast](#broadcast)                                              | 58   | 0               | 0                 |
 | `23` [Broadcast ack](#broadcast)                                          | 0    | 58              | 0                 |
@@ -1120,6 +1178,9 @@ period `0F A0` is 4000 in decimal, and 4000 slots at 5±1% milliseconds per slot
 20±1% seconds. Each module is assigned a different reporting phase, spreading the load and minimizing retransmissions at
 the [PV link layer](#pv-link-layer).
 
+In multi-TAP systems, the period `2E E0` (12000 = 60 seconds) has been observed for TAPs with fewer nodes, and each
+node's phase is staggered (e.g. `00 00`, `17 70`) to spread wireless load within each TAP's radio channel.
+
 ```text
             00 39 03 00 31 02 0F A0 09 7D 00 09 02 00 00 00 00 00 30 02 00 00 00 00
 PV node ID: 00 39
@@ -1131,8 +1192,11 @@ PV node ID: 00 39
        ???:                               00 09 02 00 00 00 00 00 30 02 00 00 00 00
 ```
 
-The PV node returns a configuration request (PV packet type `18`). The response includes both radio parameters (like the
-802.15.4 PAN ID and radio channel) and reporting parameters (echoed from the request). Both groups are separately
+On H-firmware gateways, the command response to a `13` request uses PV packet type `14` as the acknowledgement,
+while G-firmware gateways echo `13`. The actual node reply (`18`) arrives later in a receive response.
+
+The PV node returns a configuration response (PV packet type `18`). The response includes both radio parameters (like
+the 802.15.4 PAN ID and radio channel) and reporting parameters (echoed from the request). Both groups are separately
 duplicated, possibly indicating an alternate or backup configuration for each.
 
 ```text
@@ -1141,14 +1205,42 @@ duplicated, possibly indicating an alternate or backup configuration for each.
       PAN ID:    24 F6
      Channel:          15
          ???:             6C 00
-  Alternate?:                   (repeat)
-         ???:                             03 00 30 00 00 00 00 00
+  Alternate?:                   (repeat of PAN ID, channel, ???)
+ Config flag:                             03 00 30
+         ???:                                      00 00 00 00 00
         Type:                                                     31
       Period:                                                        0F A0
        Phase:                                                              09 7D
          ???:                                                                    00 09 00 00 00 00
   Alternate?:                                                                                      (repeat)
 ```
+
+An unconfigured node (before receiving a `13` request) reports `Period: 00 00`, `Phase: FF FF`, and
+`Config flag: 03 00 00` instead of `03 00 30`, indicating it has no assigned reporting schedule.
+
+### PV configuration query
+
+The controller sends PV configuration query commands (PV packet type `17`) to individual nodes. This requests the
+node's current configuration and triggers a [PV configuration response](#pv-configuration) (`18`) from the node.
+
+```text
+              00 10 0F
+  PV node ID: 00 10
+   Parameter:       0F
+```
+
+The parameter byte is always `0F` in all observed instances. The command response differs by firmware:
+
+| Gateway firmware | Command response pkt_type | Meaning |
+|-----------------|---------------------------|---------|
+| G-firmware (e.g. G8.65) | `0x17` (echoed) | Gateway handles locally, node responds later via receive response |
+| H-firmware (e.g. H1.0007) | `0x18` (PV_CONFIG_RESP) | Gateway forwards to node, proxies response immediately |
+
+Both firmware versions ultimately deliver a `0x18` PV configuration response from the node via the receive response
+packet stream.
+
+This command is sent at CCA startup as part of the per-node discovery cycle, and periodically during normal operation
+(observed ~1 per node every few minutes on a 22-node TAP).
 
 ### Broadcast
 
@@ -1191,17 +1283,33 @@ unsolicited during normal operation.
 
 PV devices periodically measure their operating parameters and send power reports (PV packet type `31`).
 
+The standard power report is 13 bytes. An extended 15-byte variant has been observed from all nodes running H9.0022
+firmware, with 2 additional bytes appended. Both formats share the same first 13 bytes.
+
 ```text
+Standard 13-byte format:
                     2B 61 58 FF 03 21 58 81 00 6E 8F A0 7E
         Voltage in: 2B 6                                     0x2B6 = 694 * 0.05V = 34.7V
        Voltage out:     1 58                                 0x158 = 344 * 0.10V = 34.4V
   DC-DC duty cycle:          FF                              0xFF = 255 = 100%
         Current in:             03 2                         0x032 = 50 * 0.005A = 0.025A
        Temperature:                 1 58                     0x158 = 344 * 0.1ºC = 34.4ºC
-               ???:                      81 00 6E
+               ???:                      81                  slowly incrementing per-node value
+               ???:                         00               always 0x00
+               ???:                            6E            observed always 0x64 (100) in live data
       Slot counter:                               8F A0      timestamp referenced to gateway
               RSSI:                                     7E   0x7E = 126
+
+Extended 15-byte format (2 additional bytes):
+         Extra [0]:                                        XX   operating mode? (0x03 = generating, 0x00 = idle)
+         Extra [1]:                                           00   always 0x00
 ```
+
+The three "unknown" bytes at offset 7-9 appear to include a slowly-changing per-node counter (byte 7), a constant zero
+(byte 8), and a constant 0x64/100 (byte 9) which may indicate module health or efficiency percentage.
+
+The extended 2-byte suffix varies by operating state: `03 00` during active solar generation, `00 00` during
+idle/low-generation periods.
 
 PV devices take measurements simultaneously at intervals synchronized to the gateway's slot counter. They transmit these
 measurements asynchronously, often with significant latency, including delaying them more than one measurement window.

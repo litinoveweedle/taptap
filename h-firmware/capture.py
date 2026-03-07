@@ -284,12 +284,30 @@ def main():
     last_summary = time.time()
     last_progress = time.time()
 
+    empty_count = 0
     try:
         while True:
             data = source.read(1024)
             if not data:
+                empty_count += 1
+                if empty_count > 200:  # ~2s of empty reads -> reconnect
+                    print(f"[{datetime.now():%H:%M:%S}] Connection lost, reconnecting...", flush=True)
+                    source.close()
+                    time.sleep(2)
+                    while True:
+                        try:
+                            source = TcpSource(HOST, PORT)
+                            source.connect()
+                            print(f"[{datetime.now():%H:%M:%S}] Reconnected!", flush=True)
+                            asm = FrameAssembler()
+                            empty_count = 0
+                            break
+                        except Exception:
+                            print(f"[{datetime.now():%H:%M:%S}] Retry...", flush=True)
+                            time.sleep(3)
                 time.sleep(0.01)
                 continue
+            empty_count = 0
             
             for is_from, gw_id, ft, payload in asm.feed(data):
                 total_frames += 1

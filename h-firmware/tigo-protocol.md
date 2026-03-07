@@ -43,6 +43,9 @@ All optimisers: `Mnode Version H9.0022 (47)`
 | `0x000B` | VERSION_RESPONSE | TAP→CCA | ✅ Documented |
 | `0x0E02` | ENUMERATION_END_REQUEST | CCA→TAP | ✅ Documented |
 | `0x0006` | ENUMERATION_END_RESPONSE | TAP→CCA | ✅ Documented |
+| **`0x0E03`** | **ENUMERATION_END_RESPONSE_2** | TAP→CCA | 🆕 All TAPs send after enum end. 13-byte payload `00×10 01 03`. Possibly the real enum_end_response. |
+| **`0x000E`** | **CHANNEL_QUERY_REQUEST** | CCA→TAP | 🆕 H-firmware only. Empty payload. |
+| **`0x000F`** | **CHANNEL_QUERY_RESPONSE** | TAP→CCA | 🆕 H-firmware only. 2 bytes: `20 {channel}`. |
 | `0x0010` | UNKNOWN_0010 | CCA→broadcast | ❓ Sent during enumeration |
 | `0x0011` | UNKNOWN_0011 | TAP→broadcast | ❓ Response to 0x0010 |
 
@@ -71,27 +74,50 @@ Always followed by: `slot_counter` (2 bytes), then zero or more PV packets.
 | G8.65 (TAP1) | Always **set** (= 0xE0 mask) | `0xFF, 0xFE, 0xE0` |
 | H1.0007 (TAP2/3) | Always **cleared** | `0x1F, 0x1E, 0x1D` |
 
-**byte[0] values** — observed across all TAPs:
+**byte[0]** — **super-epoch counter** (CONFIRMED via live capture):
 
-| Value | Meaning | Notes |
-|-------|---------|-------|
-| `0x01` | Normal response | ~62% of responses |
-| `0x41` | Normal response (alt) | ~38% of responses, bit 6 set |
+All TAPs (both G and H firmware) exhibit identical byte[0] behaviour. The value
+cycles through `0x01 → 0x41 → 0x81 → 0xC1 → 0x01 → ...` synchronized to the
+slot counter's epoch transitions:
 
-> **TODO**: Determine meaning of byte[0] bit 6 (0x40). Toggles for all TAPs equally.
-> Could be: retransmit flag, alternate buffer, epoch indicator?
+| byte[0] | Binary | Bits 7:6 | Transitions at |
+|---------|--------|----------|----------------|
+| `0x01` | `00_000001` | 0 | Slot counter epoch 3→0 wrap |
+| `0x41` | `01_000001` | 1 | Next epoch 3→0 wrap |
+| `0x81` | `10_000001` | 2 | Next epoch 3→0 wrap |
+| `0xC1` | `11_000001` | 3 | Next epoch 3→0 wrap |
+
+**Bits 7:6** = 2-bit counter that increments each time the slot counter completes
+a full cycle of 4 epochs (0→1→2→3→0). Since each epoch ≈ 60 seconds, the
+super-epoch cycle is ~240 seconds, and the full byte[0] cycle wraps every
+~960 seconds (~16 minutes).
+
+**Bit 0** = always 1. Purpose unknown — possibly "data valid" flag.
+
+**Bits 1-5** = always 0 in all observations.
+
+Verified by live capture: tracking byte[0] transitions on TAP1, TAP2, TAP3
+simultaneously shows all three TAPs transition at the same time (within ~2 seconds,
+matching their slot counter skew).
 
 ### unknown_a and unknown_b Fields
 
 Present when bits 2 and 3 are clear (in 0xE0/full-status responses, every ~16 polls).
 
-| Field | Size | Observed values | Hypothesis |
-|-------|------|-----------------|------------|
-| unknown_a | 2 bytes | `00 01`, varies | Possibly Tx-related counter |
-| unknown_b | 2 bytes | `02 00`, varies | Possibly link quality metric |
+| Field | Size | Observed values | Status |
+|-------|------|-----------------|--------|
+| unknown_a | 2 bytes | Always `00 01` | **Constant** — verified across all TAPs over extended captures |
+| unknown_b | 2 bytes | Always `02 00` | **Constant** — verified across all TAPs over extended captures |
 
-> **TODO**: Correlate with node count, packet loss, or timing.
+**tx_buffers_free**: Consistently `14` (0x0E) across all TAPs. This is likely the total
+Tx buffer capacity when no commands are pending.
 
+**rx_buffers_used**: Ranges 0-4, averaging ~0.4 for TAP1 (22 nodes) and ~0.0 for
+TAP2/TAP3 (2-3 nodes). Correlates with node count — more nodes = more queued
+PV packets between polls.
+
+> These fields appear to be static configuration values, not dynamic counters.
+> unknown_a may be a protocol version indicator, unknown_b a buffer configuration.
 ---
 
 ## 3. PV Application Layer — Packet Types
@@ -106,7 +132,8 @@ Present when bits 2 and 3 are clear (in 0xE0/full-status responses, every ~16 po
 | `0x0D` | GATEWAY_RADIO_CONFIG_REQ | CCA→gateway | ✅ | Request radio params |
 | `0x0E` | GATEWAY_RADIO_CONFIG_RESP | gateway→CCA | ✅ | Channel, PAN ID, encryption key |
 | `0x13` | PV_CONFIGURATION_REQUEST | CCA→node | ✅ | Sets report period & phase |
-| `0x17` | **UNKNOWN — see §4** | CCA→node | ❓ | **Undocumented** |
+| **`0x14`** | **PV_CONFIGURATION_ACK** | gateway→CCA | 🆕 | H-firmware gateway ack for 0x13 |
+| `0x17` | **PV_CONFIG_QUERY** | CCA→node | 🆕 Decoded | Requests current config — see §4 |
 | `0x18` | PV_CONFIGURATION_RESPONSE | node→CCA | ✅ | Echoes config + radio params |
 | `0x22` | BROADCAST | CCA→all | ✅ | PV on/off signal |
 | `0x23` | BROADCAST_ACK | gateway→CCA | ✅ | Gateway acknowledgement |
@@ -205,43 +232,63 @@ Observed values: always `00 00 00` in all captures.
 
 ---
 
-## 7. RECEIVE_REQUEST Unknown Fields
+## 7. RECEIVE_REQUEST Fields
 
 ```
 payload: [unknown_1[0], unknown_1[1], packet_number[0], packet_number[1], unknown_2]
 ```
 
-| Field | Observed values | Hypothesis |
-|-------|-----------------|------------|
-| unknown_1 | `00 01` | Always the same; possibly protocol version or buffer ID |
-| unknown_2 | `04` | Always the same; possibly request flags or max packets |
+| Field | Observed values | Status |
+|-------|-----------------|--------|
+| unknown_1 | Always `00 01` | **Constant** — matches unknown_a in RECEIVE_RESPONSE. Likely protocol version. |
+| unknown_2 | Always `0x04` | **Constant** — possibly max PV packets per response or buffer hint. |
 
-> **TODO**: Verify with longer captures.
+Verified constant across all 3 TAPs over thousands of polls in live capture.
 
 ---
 
 ## 8. Power Report Format
 
-### Standard 13-byte format (PV packet type 0x31)
+### Extended 15-byte format (PV packet type 0x31)
+
+**All 26 nodes** in this system transmit the **15-byte extended format** (not the 13-byte
+standard). The 15-byte `PowerReport15` format is now the de facto standard.
 
 ```
-Offset  Size  Field             Encoding
-0       1.5   voltage_in        12-bit, × 0.05V
-1.5     1.5   voltage_out       12-bit, × 0.10V
-3       1     dc_dc_duty_cycle  u8 / 255.0
-4       1.5   current_in        12-bit, × 0.005A
-5.5     1.5   temperature       12-bit, × 0.1°C
-7       3     unknown           3 bytes — purpose unclear
-10      2     slot_counter      Timing reference for measurement
-12      1     RSSI              Radio signal strength
+Offset  Size   Field             Encoding
+0       1.5    voltage_in        12-bit U12, × 0.05V
+1.5     1.5    voltage_out       12-bit U12, × 0.10V
+3       1      dc_dc_duty_cycle  u8 / 255.0 (1.0 = 100%)
+4       1.5    current_in        12-bit U12, × 0.005A
+5.5     1.5    temperature       12-bit U12, × 0.1°C
+7       1      power_low         Slowly incrementing value — see below
+8       1      always_zero       Always 0x00
+9       1      percentage        Always 0x64 (= 100 decimal)
+10      2      slot_counter      BE u16 — measurement timestamp ref
+12      1      RSSI              Radio signal strength indicator
+13      2      extra             See below
 ```
 
-### Extended 15-byte format
+### Unknown bytes at offset 7-9
 
-Same as above with 2 additional bytes appended. Seen as `PowerReport15` in source.
+| Byte | Observed | Analysis |
+|------|----------|----------|
+| **byte[7]** | 0x92-0x94 (TAP1 nodes), 0x11 (TAP2), 0x93 (TAP3) | Slowly incrementing per-node value. May be an energy accumulator low byte or operational hour counter. Differs between captures taken hours apart. |
+| **byte[8]** | Always `0x00` | Constant across all nodes and captures |
+| **byte[9]** | Always `0x64` (100) | Likely a percentage (100% = healthy/normal). Could be module efficiency or health score. |
 
-> **TODO**: Determine meaning of the 3 "unknown" bytes at offset 7-9.
-> Could be: energy accumulator, fault flags, or optimiser state.
+### Extended bytes (offset 13-14)
+
+| Source | Extra bytes | Notes |
+|--------|-------------|-------|
+| Live capture (daytime, generating) | `03 00` | All 26 nodes, consistent |
+| frames.log (early morning, low generation) | `00 00` | All nodes, consistent |
+
+The extra bytes change between captures at different times of day. `03 00` during
+active generation, `00 00` during low/no generation. Hypothesis: **operating mode
+or state flags**.
+
+Possible encoding: byte[13] = mode (0x00=idle, 0x03=active generation), byte[14] = reserved.
 
 ---
 
@@ -392,5 +439,201 @@ Trailing `00 3C` = 60 decimal, possibly epoch duration in seconds.
 
 ## 14. Live Capture Log
 
-_Observations from live capture sessions will be appended below._
+### Session 1 — 2026-03-07 ~12:05-12:15 UTC (daytime, active generation)
+
+**Connection**: TCP 192.168.2.94:4196
+
+**Duration**: ~10 minutes, ~46,000 frames captured
+
+**Observations**:
+- Steady-state daytime operation: only RECEIVE_REQUEST/RESPONSE polling
+- No COMMAND_REQUEST, no enumeration, no ping — pure polling loop
+- Polling order: TAP2 → TAP3 → TAP1 → TAP2 → ... (round-robin)
+- All TAPs polled at identical rate: ~26 polls/second each
+- No unknown frame types or PV packet types observed during daytime
+
+**Discoveries**:
+1. **byte[0] is a super-epoch counter** — bits 7:6 increment at each slot counter
+   full-cycle boundary (epoch 3→0). Cycle: 0x01→0x41→0x81→0xC1. All TAPs synchronized.
+2. **unknown_a** = always `00 01`, **unknown_b** = always `02 00` (constant)
+3. **tx_buffers_free** = always 14 (no commands pending during polling)
+4. **All power reports are 15-byte** extended format
+5. **Extra bytes** = `03 00` during active generation (was `00 00` in morning log)
+6. **byte[9] of power report** = always `0x64` (100) — possible health/efficiency score
+
+### Session 2 — 2026-03-07 13:28 UTC (CCA reboot, daytime)
+
+**Trigger**: CCA manually rebooted to force control message sequences.
+
+**Duration**: ~5 minutes capturing the full initialization sequence.
+
+#### New Frame Types Discovered
+
+| Frame type | Direction | Payload | Context |
+|-----------|-----------|---------|---------|
+| **`0x0E03`** | TAP→CCA | `00 00 00 00 00 00 00 00 00 00 00 01 03` | Sent by all 3 TAPs immediately after ENUMERATION_END. Identical payload. Possibly "ready" or "reset complete" signal. Note: `0x0E02` = ENUM_END_REQ, so `0x0E03` is likely the true ENUM_END_RESPONSE (not `0x0006`). |
+| **`0x000E`** | CCA→TAP | (empty) | Sent only to TAP2 & TAP3 (H-firmware). Not sent to TAP1 (G-firmware). |
+| **`0x000F`** | TAP→CCA | 2 bytes | Response to `0x000E`. TAP2: `20 16`, TAP3: `20 0E`. byte[1] = radio channel! (0x16=22, 0x0E=14). |
+
+**`0x000E`/`0x000F`**: This is an **H-firmware-only channel query**. The CCA queries
+H-firmware TAPs for their radio channel via this dedicated frame type, while G-firmware
+TAPs get their channel via the standard radio config command (0x0D/0x0E).
+
+#### CCA Boot Sequence (complete order)
+
+```
+1. Enumeration: start → response → assign IDs → identify → version → end
+2. 0x0E03 response from ALL TAPs (13 bytes, all zeros + 01 03)
+3. 0x000E/0x000F channel query (H-firmware TAPs only)
+4. PING all TAPs
+5. RADIO_CONFIG_REQ (0x0D) to each TAP — twice (data=00 00, then 00 01)
+6. PING all TAPs again
+7. BROADCAST (0x22) data=00 00 to all TAPs (PV off assert)
+8. NET_STATUS_REQ (0x2E) to TAP1, TAP2
+9. NODE_TABLE_REQ (0x26) to TAP1, TAP2 (page 1)
+10. NET_STATUS_REQ (0x2E) to TAP3
+11. NODE_TABLE_REQ (0x26) to TAP3 (page 1)
+12. BROADCAST (0x22) data=00 01 to all TAPs (PV on)
+13. NODE_TABLE_REQ (0x26) to all TAPs (page 2 → end)
+14. Per-node discovery cycle begins:
+    For each node in each TAP:
+      a. STRING_REQ "^00Version\r"
+      b. 0x17 config query (param=0x0F)
+      c. STRING_REQ "^00Info\r"
+      d. STRING_REQ "^00Smrt\r"
+      e. STRING_REQ "^00Mppt\r" (some nodes)
+      f. STRING_REQ "^00Smrt_........S0000...0000\r" (write Smrt config)
+      g. PV_CONFIG_REQ (0x13) — only to TAP2/TAP3 nodes
+    → Nodes respond with TOPOLOGY_REPORT as they join
+    → 0x17 triggers PV_CONFIG_RESP (0x18) from nodes
+```
+
+#### PV_CONFIG_REQ (0x13) → Response Type `0x14` (NEW!)
+
+A new response type was discovered: `0x14`. When CCA sends `0x13` (PV_CONFIG_REQ)
+to H-firmware TAPs, the COMMAND_RESPONSE has `pkt_type = 0x14` (not `0x18`):
+
+| TAP firmware | 0x13 sent? | COMMAND_RESPONSE pkt_type | Node 0x18 via RECEIVE_RESPONSE? |
+|-------------|-----------|--------------------------|--------------------------------|
+| G (TAP1) | No | N/A | N/A |
+| H (TAP2/3) | Yes | **0x14** (NEW) | Yes (later) |
+
+`0x14` is the **gateway-level acknowledgement** of a PV config request on H-firmware.
+The actual node response (`0x18`) arrives later via the RECEIVE_RESPONSE PV packet stream.
+
+#### PV_CONFIG_RESP (0x18) Detail — TAP Comparison
+
+**TAP1 (G-firmware) nodes — configured with period=0x2EE0 (60s):**
+```
+Node  2: 0F 32 04 11 7A 00 32 04 11 7A 00 03 00 30 ... 31 2E E0 00 00 00 09
+Node  3: 0F 32 04 11 7A 00 32 04 11 7A 00 03 00 30 ... 31 2E E0 13 2D 00 09
+         │  └─PAN──┘ └CH┘ └─?─┘ └PAN──┘ └CH┘ │        └type└period─┘ └phase┘
+         │  0x3204    0x11  7A    0x3204   0x11│          0x31  12000
+         0F                                   00 03 00 30 ...
+```
+
+**TAP2 (H-firmware) node 26 — NOT YET configured (0x13 not received before 0x17):**
+```
+Node 26: 0F 42 04 16 65 00 42 04 16 65 00 03 00 00 00 00 FF FF 00 31 00 00 FF FF
+         │  └─PAN──┘ └CH┘ └─?─┘ └PAN──┘ └CH┘ │        └type└period─┘ └phase┘
+         │  0x4204    0x16  65    0x4204   0x16│          0x31  0x0000   0xFFFF
+         0F                                   00 03 00 00 ...
+```
+
+Key difference: **unconfigured H-firmware nodes report period=0x0000 and phase=0xFFFF**
+(vs the expected 0x2EE0 / specific phase). The CCA then sends `0x13` to set the correct
+values.
+
+**TAP3 (H-firmware) node 24 — configured (0x13 received):**
+```
+Node 24: 0F 52 04 0E 62 00 52 04 0E 62 00 03 00 30 ... 31 2E E0 11 94 00 09
+         │  └─PAN──┘ └CH┘         └PAN──┘ └CH┘           └type└period─┘ └phase┘
+         │  0x5204    0x0E                                 0x31  12000    4500
+```
+
+#### 0x18 Response Full Decode
+
+```
+Offset  Size  Field              TAP1 example        Unconfigured (TAP2)
+0       1     ???                0x0F                0x0F
+1       2     PAN_ID             0x3204              0x4204
+3       1     channel            0x11                0x16
+4       2     ???                0x7A 0x00           0x65 0x00
+6       2     PAN_ID (backup?)   0x3204              0x4204
+8       1     channel (backup?)  0x11                0x16
+9       2     ???                0x7A 0x00           0x65 0x00
+11      1     ???                0x03                0x03
+12      1     ???                0x00                0x00
+13      1     config_flag        0x30                0x00        ← differs!
+14      8     ???                varies              00 00 FF FF
+22      1     report_type        0x31                0x31
+23      2     period             0x2EE0 (60s)        0x0000 (not set)
+25      2     phase              varies              0xFFFF (not set)
+27      2     ???                0x00 0x09           0x00 0x00
+... (repeat for backup config)
+```
+
+`config_flag` at offset 13: `0x30` = configured, `0x00` = unconfigured.
+
+#### Node Firmware Variants
+
+Most nodes report `H9.0022 (47)`, but some differ:
+
+| Firmware | Nodes |
+|----------|-------|
+| `Mnode Version H9.0022 (47)` | 2, 3, 5, 10, 11, 12, 13, 16, 18, 21, 23, 24, 27 |
+| `Mnode Version H9.0022 (41)` | **7, 8, 9** |
+
+The `(41)` vs `(47)` suffix likely indicates a hardware revision or build variant.
+
+#### Topology Report Decode (0x09) — with next-hop routing
+
+```
+Offset  Size  Field           Example (Node 18)
+0       2     short_address   0x0003
+2       2     PV_node_id      0x0012 (18)
+4       2     next_hop        0x0002 (node 2)     ← mesh routing!
+6       2     ???             0x0002
+8       8     long_address    04:C0:5B:40:00:D3:9A:58
+16      1     RSSI            0x4B (75)
+17      1     ???             0x02
+18      2     ???             0x1D 0x15
+20      2     ???             0x00 0x17
+22      1     ???             0x28
+```
+
+Interesting routing observations from topology reports:
+- Nodes 2, 3, 11, 21, 23, 28 → next_hop = `00 01` (direct to gateway)
+- Nodes 5, 10 → next_hop = `00 18` (via node 24)
+- Nodes 15, 22 → multi-hop chains
+- **TAP2/TAP3 nodes** (24, 26, 27) → all direct to gateway (next_hop = `00 01`)
+
+#### Broadcast Commands
+
+| Sequence | Data | Meaning |
+|----------|------|---------|
+| First (seq 7-9) | `00 00` | PV OFF — sent to all TAPs during init |
+| Second (seq 16-18) | `00 01` | PV ON — sent to all TAPs after node table loaded |
+
+Confirms the protocol doc: byte[1] is the PV on/off flag (0=off, 1=on).
+BCAST_ACK response data = `02` (same for all TAPs).
+
+#### Network Status Response Detail
+
+| TAP | Response hex | Node count |
+|-----|-------------|------------|
+| TAP1 | `00 00 00 00 00 00 18 00 18 00` | 0x18 = **24** nodes |
+| TAP2 | `00 00 00 00 00 00 02 00 02 00` | 0x02 = **2** nodes |
+| TAP3 | `00 00 00 00 00 00 02 00 02 00` | 0x02 = **2** nodes |
+
+Note: TAP1 reports 24 nodes (includes gateway + 22 optimisers + 1 extra?).
+The first 6 bytes are all zeros at boot time (counters not yet started).
+
+### Pending observations
+
+- [ ] 0x41 packets (overnight only)
+- [ ] 0x2D long network status (overnight only)
+- [ ] Frame type 0x0010/0x0011 (seen in frames.log enumeration but not in this reboot)
+- [ ] Power report extra bytes transition (`03 00` → `00 00`) at sunset
+
 
