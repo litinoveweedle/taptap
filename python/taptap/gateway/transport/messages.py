@@ -88,9 +88,9 @@ class ReceiveResponse:
         # Read status_type bitmask
         status_type = int.from_bytes(data[0:2], byteorder='big')
         
-        # Validate known pattern (bits 5-7 must be set)
-        if status_type & 0x00E0 != 0x00E0:
-            return None
+        # Bits 0-4 determine which optional fields are present.
+        # Bits 5-7 are firmware-dependent flags (set on G-firmware, cleared on H-firmware)
+        # and do not affect the payload structure.
         
         offset = 2
         

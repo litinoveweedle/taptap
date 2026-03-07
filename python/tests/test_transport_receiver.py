@@ -77,6 +77,58 @@ def test_receive_response_full_packet_number():
     assert response.tx_buffers_free is None
 
 
+def test_receive_response_h_firmware_no_optional_fields():
+    """Test H-firmware status 0x011F — no optional fields (equivalent to G-firmware 0x01FF).
+    
+    From tigo_parsing.md Appendix A: TAP2: 01 1F AD D3 CB
+    """
+    data = bytes([0x01, 0x1F, 0xAD, 0xD3, 0xCB])
+    result = ReceiveResponse.read_from_bytes(data, 0x00AC)
+    assert result is not None
+
+    response, packets = result
+    assert response.rx_buffers_used is None
+    assert response.tx_buffers_free is None
+    assert response.unknown_a is None
+    assert response.unknown_b is None
+    assert response.packet_number == 0x00AD
+    assert response.slot_counter.to_u16() == 0xD3CB
+    assert packets._data == b''
+
+
+def test_receive_response_h_firmware_with_rx_buffers():
+    """Test H-firmware status 0x011E — rx_buffers_used present (equivalent to G-firmware 0x01FE).
+    
+    From tigo_parsing.md Appendix A: TAP3 data-bearing response with power report.
+    """
+    data = bytes([0x01, 0x1E, 0x02, 0x4A, 0xD4, 0x57, 0x31, 0x00, 0x1B])
+    result = ReceiveResponse.read_from_bytes(data, 0x0049)
+    assert result is not None
+
+    response, packets = result
+    assert response.rx_buffers_used == 0x02
+    assert response.tx_buffers_free is None
+    assert response.packet_number == 0x004A
+    assert response.slot_counter.to_u16() == 0xD457
+    assert packets._data == bytes([0x31, 0x00, 0x1B])
+
+
+def test_receive_response_h_firmware_all_optional_fields():
+    """Test H-firmware status 0x0100 — all optional fields (equivalent to G-firmware 0x01E0)."""
+    data = bytes([0x01, 0x00, 0x04, 0x0E, 0x00, 0x01, 0x02, 0x00, 0x40, 0xFB, 0x21, 0x1B, 5, 6])
+    result = ReceiveResponse.read_from_bytes(data, 0x40FB)
+    assert result is not None
+
+    response, packets = result
+    assert response.rx_buffers_used == 0x04
+    assert response.tx_buffers_free == 0x0E
+    assert response.unknown_a == bytes([0x00, 0x01])
+    assert response.unknown_b == bytes([0x02, 0x00])
+    assert response.packet_number == 0x40FB
+    assert response.slot_counter.to_u16() == 0x211B
+    assert packets._data == bytes([5, 6])
+
+
 class MockSink:
     """Mock sink for testing — implements all 8 transport.Sink methods."""
     

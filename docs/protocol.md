@@ -273,49 +273,71 @@ The receive response begins with a 16-bit bitfield. The bitfield is read right-t
 included. After the indicated optional fields, the Rx response has the low half of the packet number, the slot counter,
 and zero or more PV network packets.
 
+Only bits 0-4 of the second byte determine the payload structure. Bits 5-7 are firmware-dependent flags: G-firmware
+(e.g. G8.65) sets them (`0xE0`+), while H-firmware (e.g. H1.0007) clears them (`0x1F`-). Both formats encode the same
+optional fields via bits 0-4.
+
 ```text
-Status type: 00 E0
+Status type: 00 E0  (G-firmware)  /  01 00  (H-firmware equivalent)
              0    0    E    0
              0000 0000 1110 0000
-                               0   Rx buffers used (1 byte)
-                              0    Tx buffers free (1 byte)
-                             0     ??? A (2 bytes)
-                            0      ??? B (2 bytes)
-                          0        Packet # high (1 byte)
+                          ???        Bits 5-7: firmware-dependent (no payload effect)
+                                0   Rx buffers used (1 byte)
+                               0    Tx buffers free (1 byte)
+                              0     ??? A (2 bytes)
+                             0      ??? B (2 bytes)
+                           0        Packet # high (1 byte)
 ```
 
 ```text
-        Payload: 00 E0 04 0E 00 01 02 00 40 FB 21 1B …
-    Status type: 00 E0
-Rx buffers used:       04
-Tx buffers free:          0E
-          ??? A:             00 01
-          ??? B:                   02 00
-  Packet # high:                         40
-   Packet # low:                            FB
-   Slot counter:                               21 1B
-        Packets:                                     …
+         G-firmware examples:
 
-        Payload: 00 FE 02 FF 21 22 …
-    Status type: 00 FE
-Rx buffers used:       02
-   Packet # low:          FF
-   Slot counter:             21 22
-        Packets:                   …
+         Payload: 00 E0 04 0E 00 01 02 00 40 FB 21 1B …
+     Status type: 00 E0
+ Rx buffers used:       04
+ Tx buffers free:          0E
+           ??? A:             00 01
+           ??? B:                   02 00
+   Packet # high:                         40
+    Packet # low:                            FB
+    Slot counter:                               21 1B
+         Packets:                                     …
 
-        Payload: 00 EE 00 41 01 21 27 …
-    Status type: 00 EE
-Rx buffers used:       00
-  Packet # high:          41
-   Packet # low:             01
-   Slot counter:                21 27
-        Packets:                      …
+         Payload: 00 FE 02 FF 21 22 …
+     Status type: 00 FE
+ Rx buffers used:       02
+    Packet # low:          FF
+    Slot counter:             21 22
+         Packets:                   …
 
-        Payload: 00 FF 03 21 31 …
-    Status type: 00 FF
-   Packet # low:       03
-   Slot counter:          21 31
-        Packets:                …
+         Payload: 00 EE 00 41 01 21 27 …
+     Status type: 00 EE
+ Rx buffers used:       00
+   Packet # high:          41
+    Packet # low:             01
+    Slot counter:                21 27
+         Packets:                      …
+
+         Payload: 00 FF 03 21 31 …
+     Status type: 00 FF
+    Packet # low:       03
+    Slot counter:          21 31
+         Packets:                …
+
+         H-firmware examples (bits 5-7 cleared, same field structure):
+
+         Payload: 01 1F AD D3 CB
+     Status type: 01 1F
+    Packet # low:       AD
+    Slot counter:          D3 CB
+         Packets:                (none)
+
+         Payload: 01 1E 02 4A D4 57 …
+     Status type: 01 1E
+ Rx buffers used:       02
+    Packet # low:          4A
+    Slot counter:             D4 57
+         Packets:                   …
 ```
 
 The slot counter seems to be known by remote devices at the [PV link layer](#pv-link-layer), so the slot counter is

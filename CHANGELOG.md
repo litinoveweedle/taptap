@@ -10,8 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Fixed
+- H-firmware (H1.0007) TAP RECEIVE_RESPONSE parsing: removed overly-strict `status_type & 0x00E0`
+  validation that rejected 93.7% of responses from H-firmware gateways, silently dropping power
+  reports. Bits 5-7 are firmware-dependent flags with no effect on payload structure.
+- TCP keepalive `with_retries()` cfg gate now correctly excludes Windows (where API is unavailable)
 
 ### Changed
+- Updated `docs/protocol.md` to document H-firmware status type format
 
 ### Deprecated
 
