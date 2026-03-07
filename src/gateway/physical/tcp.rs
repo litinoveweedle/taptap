@@ -60,11 +60,10 @@ fn enable_keepalive(socket: &TcpStream, cfg: TcpKeepaliveConfig) -> std::io::Res
 
     keepalive = keepalive.with_time(cfg.idle);
     keepalive = keepalive.with_interval(cfg.interval);
-    // Note: .with_retries() is not available on all platforms.
+    // Note: .with_retries() is not available on Windows.
     #[cfg(any(
         target_os = "linux",
         target_os = "android",
-        target_os = "windows",
         target_os = "macos",
         target_os = "ios"
     ))]

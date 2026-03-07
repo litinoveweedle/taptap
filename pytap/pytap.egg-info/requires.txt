@@ -1,0 +1,10 @@
+
+[cli]
+click>=8.0
+
+[dev]
+pytest>=7.0
+pytest-cov
+
+[serial]
+pyserial>=3.5
